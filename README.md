@@ -1,4 +1,7 @@
-# Reinforcement learning in language models recruits a functional welfare axis
+# THE UPDATED CODE TO SEE AT src/controllabiltiy
+
+
+# Reinforcement learning in language models recruits a functional welfare axis (INITIAL REPO)
 
 Code for "Reinforcement learning in language models recruits a functional welfare axis" (Andy Q Han, David J. Chalmers, Pavel Izmailov).
 
