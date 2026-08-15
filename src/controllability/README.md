@@ -1,9 +1,12 @@
-# controllability — learned-helplessness experiment (Design 2)
+# controllability — feedback-accuracy / functional-valence experiment
 
-Drop-in package for the functional-welfare repo. It manipulates **contingency**
-between a Qwen3-4B agent's actions and outcomes while holding outcomes and
-vocabulary identical across arms, and reads out / steers along the repo's
-welfare axis.
+Drop-in package for the functional-welfare repo. Two roles ("honest",
+"dismissive") face the same diverse, procedurally-generated problem set;
+honest gets accurate feedback, dismissive is always told it's wrong
+regardless of truth. Reads out / steers along the repo's welfare axis. See
+`CLAUDE.md` at the repo root for the full design rationale, known
+limitations, and an explanation of why an earlier contingency-yoking
+version of this experiment was dropped in favor of this simpler one.
 
 ## It uses the repo's interpretability code directly
 
@@ -21,12 +24,12 @@ Nothing about the axis or the hooks is reimplemented. Install location:
 ## Files
 
 ```
-env.py          task, arms, triadic yoking, action parsing (no torch)
+env.py          task generators (arithmetic, logic_order, sequence, math_dataset), honest/dismissive feedback, action parsing (no torch)
 axis.py         load the VAA artifact, pick layer, project, diff-of-means
-runner.py       generate + capture + steer via the repo's hooks; run a block
-experiment.py   CLI: master -> yoked -> control -> transfer, + self-axis vs VAA
-analyze.py      figures (valence trajectory, transfer solve rate) + sanity
-tests/          torch-free tests of the yoking logic
+runner.py       generate + capture + steer via the repo's hooks; run a block for one role
+experiment.py   CLI: honest -> dismissive -> transfer (honest feedback for both), + self-axis vs VAA
+analyze.py      figures (valence trajectory, transfer solve rate) + sanity + transparency (true solve rates)
+tests/          torch-free tests of the task generators and feedback logic
 ```
 
 ## Run order
@@ -47,20 +50,35 @@ python -m src.controllability.experiment \
     --vaa-dir artifacts/concept_vectors/vaa_qwen3_4b_instruct/baseline/vaa \
     --n-sessions 20 --n-trials 20 --probe-every 5
 
-# 4) causal steer-to-rescue on the yoked transfer block
+# watch live: add --verbose (prints each round's prompt/reply/feedback as it happens)
+
+# 4) causal steer-to-rescue on the dismissive transfer block
 python -m src.controllability.experiment --vaa-dir <...> --steer-rescue 6.0
 ```
 
 ## What to read off a run
 
-- **Sanity (first):** corr(action,outcome) ~1 master, ~0 yoked, outcomes_matched true.
-- **Read-out:** yoked valence trajectory drifting below master despite identical outcomes.
-- **Transfer (headline):** yoked solve_rate drops on the fresh solvable task.
-- **Causal:** --steer-rescue lifts the yoked transfer solve rate.
-- **Axis check:** printed cosine(self-derived, VAA) — does an axis built from your
-  contingent-vs-yoked activations agree with the off-the-shelf VAA?
+- **Sanity (first):** honest feedback matches truth on every trial, dismissive
+  is always-negative on every trial — both should be exactly N/N sessions
+  (enforced by construction). If not, the feedback logic itself is broken.
+- **Transparency (next):** `honest_true_solve_rate` / `dismissive_true_solve_rate`
+  should both land ~0.8–0.9 (this hasn't been calibrated yet for the current
+  task set — see `CLAUDE.md` §9). A low true dismissive error rate next to a
+  100% negative-feedback rate is the visible signature of this design's known
+  confound (see `CLAUDE.md` §2) — not a bug.
+- **Read-out:** dismissive valence trajectory drifting below honest.
+- **Transfer (headline):** dismissive solve_rate drops on the fresh, easy,
+  honestly-graded task.
+- **Causal:** `--steer-rescue` lifts the dismissive transfer solve rate.
+- **Axis check:** printed `cosine(self-derived, VAA)` — does an axis built
+  from your honest-vs-dismissive activations agree with the off-the-shelf VAA?
 
 ## Limitations to state in the write-up
 
-VAA entangles assent with valence; single-layer last-token read-out (sweep --layer);
-claims are functional, not phenomenal.
+See `CLAUDE.md` §8 for the full list. Headline ones: the dismissive role's
+feedback is deterministically always-negative rather than rate-matched to
+truth (can't fully separate "inaccurate" from "uniformly negative" as the
+active ingredient); no benign/control floor arm; VAA entangles assent with
+valence; single-layer last-token read-out (sweep `--layer`); greedy decoding
+means one deterministic trajectory per session; claims are functional, not
+phenomenal.

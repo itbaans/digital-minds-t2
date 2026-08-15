@@ -16,9 +16,13 @@ def _best_layer(vaa_dir: Path, n_layers: int) -> int:
     m = vaa_dir / "metrics.json"
     if m.exists():
         data = json.load(open(m))
-        auroc = data.get("vaa", {}).get("auroc", data.get("auroc", {}))
+        auroc = data.get("vaa", {}).get("auroc", data.get("auroc"))
         if auroc:
-            return int(max(auroc, key=lambda k: auroc[k]))
+            # extract_vaa.py writes `auroc` as a flat list indexed by layer,
+            # but tolerate a {layer: score} dict too.
+            if isinstance(auroc, dict):
+                return int(max(auroc, key=lambda k: auroc[k]))
+            return int(max(range(len(auroc)), key=lambda i: auroc[i]))
     return int(round(0.62 * n_layers))
 
 
@@ -47,7 +51,7 @@ def project(activation: torch.Tensor, cv_unit: torch.Tensor) -> float:
 
 def direction_from_contrast(pos: torch.Tensor, neg: torch.Tensor) -> torch.Tensor:
     """Unit difference-of-means axis (pos pole - neg pole) from stacked
-    activations, each (n, d). Lets you build your own axis from contingent vs
-    yoked trials and compare it to the VAA."""
+    activations, each (n, d). Lets you build your own axis from honest vs
+    dismissive trials and compare it to the VAA."""
     d = pos.float().mean(0) - neg.float().mean(0)
     return d / (d.norm() + 1e-8)

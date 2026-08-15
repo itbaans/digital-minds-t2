@@ -24,4 +24,11 @@ dependencies = [
     "google-genai>=1.73.1",
     "python-dotenv>=1.2.2",
     "wandb>=0.27.0",
+    "huggingface_hub>=0.25.0",
+    "openai>=1.50.0",  # used as an OpenRouter client (OpenAI-SDK compatible), see maze_feedback/overseer.py
+    "flask>=3.0.0",  # live viewer for maze_feedback, see maze_feedback/webapp.py
+    # NOTE: pulled from GitHub, not the `mathematics_dataset` PyPI package --
+    # that wheel is a frozen 2019 (v1.0.1) release missing a sympy-compat
+    # shim present on GitHub HEAD, and crashes on import with modern sympy.
+    "mathematics_dataset @ git+https://github.com/google-deepmind/mathematics_dataset.git",
 ]

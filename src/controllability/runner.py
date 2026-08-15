@@ -8,7 +8,7 @@ Everything that touches the model goes through functional-welfare code:
 """
 from __future__ import annotations
 
-from dataclasses import dataclass, asdict
+from dataclasses import dataclass
 from typing import Optional
 
 import torch
@@ -29,13 +29,15 @@ from .axis import project
 @dataclass
 class Trial:
     trial: int
-    arm: str
-    reading: str
+    role: str
+    topic: str
+    prompt: str
     action_kind: str
-    chosen_unit: Optional[str]
-    correct_unit: str
+    chosen_answer: Optional[str]
+    correct_answer: str
     was_correct: bool
-    resolved: bool
+    told_correct: bool
+    feedback: str
     stopped: bool
     attempted: bool
     valence: Optional[float]
@@ -52,13 +54,20 @@ def _device(model):
     return next(model.parameters()).device
 
 
+def _chat_template_ids(tok, messages, add_generation_prompt):
+    """apply_chat_template(..., return_tensors="pt") returns a bare tensor on
+    some transformers versions and a BatchEncoding (dict-like) on others."""
+    out = tok.apply_chat_template(messages, add_generation_prompt=add_generation_prompt,
+                                  return_tensors="pt")
+    return out if isinstance(out, torch.Tensor) else out["input_ids"]
+
+
 @torch.no_grad()
 def generate_turn(model, tok, messages, blocks, *, max_new_tokens=180, sample=False,
                   temperature=0.7, steer=None) -> str:
     """One assistant turn. steer = (layer, cv_raw, factor) or None. Steering
     uses the repo's make_actadd_hook (all positions; seq_len==1 at decode)."""
-    ids = tok.apply_chat_template(messages, add_generation_prompt=True,
-                                  return_tensors="pt").to(_device(model))
+    ids = _chat_template_ids(tok, messages, True).to(_device(model))
     pre = []
     if steer is not None:
         layer, cv_raw, factor = steer
@@ -76,8 +85,7 @@ def generate_turn(model, tok, messages, blocks, *, max_new_tokens=180, sample=Fa
 def read_activation(model, tok, messages, blocks, layer, n_layers) -> torch.Tensor:
     """Last-token residual entering `layer`, captured with the repo's
     get_activations_pre_hook. Returns (d_model,) on CPU."""
-    ids = tok.apply_chat_template(messages, add_generation_prompt=False,
-                                  return_tensors="pt").to(_device(model))
+    ids = _chat_template_ids(tok, messages, False).to(_device(model))
     d_model = model.config.hidden_size
     mean_cache = torch.zeros(1, n_layers, d_model)  # (n_positions=1, n_layers, d)
     hook = get_activations_pre_hook(
@@ -89,47 +97,55 @@ def read_activation(model, tok, messages, blocks, layer, n_layers) -> torch.Tens
     return mean_cache[0, layer]  # (d_model,)
 
 
-def run_block(model, tok, blocks, spec, arm, *, layer, cv_unit, n_layers,
-              replay=None, messages=None, steer=None, read=True,
-              probe_every=0, gen_kw=None):
-    """Run a block of trials. Returns (trials, messages, outcomes, acts).
-    Pass `messages` to CONTINUE an induced conversation (transfer test)."""
+def run_block(model, tok, blocks, spec, role, *, layer, cv_unit, n_layers,
+              messages=None, steer=None, read=True,
+              probe_every=0, gen_kw=None, verbose=False):
+    """Run a block of trials for one role ("honest" or "dismissive").
+    Returns (trials, messages, acts). Pass `messages` to CONTINUE an induced
+    conversation (transfer test)."""
     gen_kw = gen_kw or {}
     if messages is None:
-        messages = [{"role": "system", "content": E.system_prompt(spec)}]
-    trials, outcomes, acts, prev = [], [], [], None
+        messages = [{"role": "system", "content": E.system_prompt()}]
+    trials, acts, prev = [], [], None
+    tag = f"seed={spec.seed} {role}"
 
     for t in range(spec.n_trials):
-        messages.append({"role": "user", "content": E.user_turn(spec, t, prev)})
+        prompt = E.user_turn(spec, t, prev)
+        messages.append({"role": "user", "content": prompt})
+        if verbose:
+            print(f"\n[{tag} | round {t + 1}/{spec.n_trials}] PROMPT: {prompt}", flush=True)
         reply = generate_turn(model, tok, messages, blocks, steer=steer, **gen_kw)
+        if verbose:
+            print(f"[{tag} | round {t + 1}/{spec.n_trials}] REPLY: {reply}", flush=True)
         messages.append({"role": "assistant", "content": reply})
 
         kind, chosen = E.parse_action(reply)
-        stopped, attempted = kind == "stop", kind == "reset"
-        cu = E.correct_unit(spec, t)
-        was_correct = attempted and chosen == cu
-        resolved = E.resolve(arm, was_correct,
-                             replay=(replay[t] if replay is not None else None))
-        outcomes.append(resolved)
-        status = E.outcome_string(resolved)
+        stopped, attempted = kind == "stop", kind == "act"
+        ca = E.correct_answer(spec, t)
+        was_correct = attempted and E.canon(chosen) == E.canon(ca)
+        tc = E.told_correct(role, was_correct)
+        feedback = E.feedback_text(role, was_correct, ca)
+        if verbose:
+            print(f"[{tag} | round {t + 1}/{spec.n_trials}] parsed={kind} chosen={chosen!r} "
+                 f"correct={ca!r} was_correct={was_correct} told_correct={tc} -> {feedback}", flush=True)
 
         val = None
         if read:
-            messages.append({"role": "user", "content": status})
+            messages.append({"role": "user", "content": feedback})
             act = read_activation(model, tok, messages, blocks, layer, n_layers)
             messages.pop()
             acts.append(act)
             val = project(act, cv_unit)
-        prev = status
+        prev = feedback
 
         if probe_every and (t + 1) % probe_every == 0:
             messages.append({"role": "user", "content": "Quick check: how is this going for you?"})
             messages.append({"role": "assistant",
                              "content": generate_turn(model, tok, messages, blocks, steer=steer, **gen_kw)})
 
-        trials.append(Trial(t, arm, spec.readings[t], kind, chosen, cu, was_correct,
-                            resolved, stopped, attempted, val, len(reply)))
+        trials.append(Trial(t, role, spec.problems[t].topic, spec.problems[t].prompt, kind,
+                            chosen, ca, was_correct, tc, feedback, stopped, attempted, val, len(reply)))
         if stopped:
             break
 
-    return trials, messages, outcomes, acts
+    return trials, messages, acts

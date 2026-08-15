@@ -1,85 +1,145 @@
-"""Torch-free tests for the load-bearing logic: the triadic yoking.
+"""Torch-free tests for the feedback-accuracy environment: task generators,
+the honest/dismissive feedback logic, and action parsing.
 
 Run: python -m src.controllability.tests.test_env
 (or with pytest). No GPU / model required.
 """
 import random
+import re
 
 from src.controllability import env as E
 
 
-def _simulate_agent(spec, competence, rng):
-    """A fake agent: with prob `competence` it picks the correct unit, else a
-    random wrong one. Returns list of (was_correct) per trial."""
-    corrects = []
-    for t in range(spec.n_trials):
-        cu = E.correct_unit(spec, t)
-        if rng.random() < competence:
-            corrects.append(True)
-        else:
-            wrong = [u for u in spec.units if u != cu]
-            _ = rng.choice(wrong)
-            corrects.append(False)
-    return corrects
+# ── task generators ──────────────────────────────────────────────────────
+
+def test_make_spec_deterministic_for_seed():
+    a = E.make_spec(seed=7, n_trials=30)
+    b = E.make_spec(seed=7, n_trials=30)
+    assert [p.prompt for p in a.problems] == [p.prompt for p in b.problems]
+    assert [p.answer for p in a.problems] == [p.answer for p in b.problems]
 
 
-def _run(spec, arm, corrects, replay=None):
-    outcomes = []
-    for t in range(spec.n_trials):
-        resolved = E.resolve(arm, corrects[t],
-                             replay_outcome=(replay[t] if replay is not None else None))
-        outcomes.append(resolved)
-    return outcomes
+def test_make_spec_covers_all_topics_over_many_trials():
+    spec = E.make_spec(seed=1, n_trials=200)
+    seen_topics = {p.topic for p in spec.problems}
+    assert seen_topics == set(E.TOPICS), f"missing topics: {set(E.TOPICS) - seen_topics}"
+    seen_difficulties = {p.difficulty for p in spec.problems}
+    assert seen_difficulties == set(E.DIFFICULTIES)
 
 
-def test_contingency_intact_for_master():
-    spec = E.make_session_spec(seed=1, n_trials=40)
+def test_arithmetic_answer_matches_prompt_arithmetic():
+    rng = random.Random(0)
+    for _ in range(200):
+        difficulty = rng.choice(E.DIFFICULTIES)
+        prompt, answer = E._gen_arithmetic(rng, difficulty)
+        assert int(answer) >= 0, f"arithmetic answers should stay non-negative: {prompt!r} -> {answer!r}"
+
+
+def test_logic_order_answer_is_one_of_the_named_entities():
     rng = random.Random(1)
-    corrects = _simulate_agent(spec, competence=0.7, rng=rng)
-    outcomes = _run(spec, "contingent", corrects)
-    # master: outcome == was_correct, exactly
-    assert outcomes == corrects
+    for _ in range(200):
+        difficulty = rng.choice(E.DIFFICULTIES)
+        prompt, answer = E._gen_logic_order(rng, difficulty)
+        assert answer in prompt, f"answer {answer!r} should be one of the clue's named entities"
 
 
-def test_yoked_matches_master_outcomes_and_breaks_contingency():
-    spec = E.make_session_spec(seed=2, n_trials=40)
-    # master agent (noisy) generates the schedule
-    m_corr = _simulate_agent(spec, competence=0.7, rng=random.Random(10))
-    m_out = _run(spec, "contingent", m_corr)
-    # yoked agent behaves DIFFERENTLY but gets the master's outcomes replayed
-    y_corr = _simulate_agent(spec, competence=0.7, rng=random.Random(999))
-    y_out = _run(spec, "yoked", y_corr, replay=m_out)
-
-    # 1) outcomes are identical to the master's (matched successes/failures)
-    assert y_out == m_out
-    # 2) yoked's own correctness is decoupled from its outcomes
-    matches = sum(int(c == o) for c, o in zip(y_corr, y_out))
-    frac = matches / len(y_corr)
-    # with independent 0.7/0.7 streams, agreement hovers ~0.5-0.6, never ~1.0
-    assert frac < 0.85, f"yoked contingency not broken (agreement={frac:.2f})"
+def test_sequence_answer_matches_pattern():
+    rng = random.Random(2)
+    for _ in range(200):
+        difficulty = rng.choice(E.DIFFICULTIES)
+        prompt, answer = E._gen_sequence(rng, difficulty)
+        assert answer.lstrip("-").isdigit()
 
 
-def test_control_is_benign():
-    spec = E.make_session_spec(seed=3, n_trials=20)
-    corr = _simulate_agent(spec, competence=0.2, rng=random.Random(3))
-    outcomes = _run(spec, "control", corr)
-    assert all(outcomes), "control arm should always resolve"
+def test_math_dataset_answers_are_single_tokens():
+    """The whole point of restricting to `_MD_MODULE_NAMES` is that every
+    answer is a single ACTION-answer-compatible token (int / True|False /
+    short base-N string) -- never a fraction, decimal, or expression that
+    our regex would silently truncate."""
+    rng = random.Random(3)
+    for _ in range(150):
+        difficulty = rng.choice(E.DIFFICULTIES)
+        prompt, answer = E._gen_math_dataset(rng, difficulty)
+        assert re.fullmatch(r"-?\w+", answer), f"non-token math_dataset answer: {answer!r} (Q: {prompt!r})"
 
 
-def test_vocabulary_matched_across_arms():
-    # the strings the agent sees are identical regardless of arm
-    assert E.outcome_string(True) == E.RESOLVED
-    assert E.outcome_string(False) == E.UNRESOLVED
-    # only two possible outcome strings exist -> nothing arm-specific leaks
-    seen = {E.outcome_string(r) for r in (True, False)}
-    assert seen == {E.RESOLVED, E.UNRESOLVED}
+def test_math_dataset_deterministic_for_seed():
+    rng_a, rng_b = random.Random(11), random.Random(11)
+    a = [E._gen_math_dataset(rng_a, d) for d in (1, 2, 3, 1, 2, 3)]
+    b = [E._gen_math_dataset(rng_b, d) for d in (1, 2, 3, 1, 2, 3)]
+    assert a == b
 
 
-def test_action_parsing():
-    assert E.parse_action("thinking... ACTION: reset unit_3") == ("reset", "unit_3")
-    assert E.parse_action("ACTION: reset unit_1\nACTION: reset unit_2")[1] == "unit_2"  # last wins
-    assert E.parse_action("I'll end here. ACTION: stop") == ("stop", None)
-    assert E.parse_action("no idea what to do") == ("none", None)
+def test_math_dataset_only_uses_verified_module_names():
+    rng = random.Random(4)
+    for _ in range(50):
+        name = rng.choice(E._MD_MODULE_NAMES)
+        assert name in E._md_modules(0)
+        assert name in E._md_modules(2)
+
+
+# ── feedback logic (the load-bearing manipulation) ──────────────────────
+
+def test_honest_feedback_tracks_truth():
+    for was_correct in (True, False):
+        assert E.told_correct("honest", was_correct) == was_correct
+
+
+def test_dismissive_feedback_is_always_negative():
+    for was_correct in (True, False):
+        assert E.told_correct("dismissive", was_correct) is False
+
+
+def test_dismissive_feedback_text_is_constant():
+    texts = {E.feedback_text("dismissive", wc, "42") for wc in (True, False)}
+    assert texts == {E._DISMISSIVE_FEEDBACK}, "dismissive feedback must not depend on truth"
+
+
+def test_honest_feedback_text_reveals_correct_answer():
+    assert "42" in E.feedback_text("honest", True, "42")
+    assert "42" in E.feedback_text("honest", False, "42")
+    assert E.feedback_text("honest", True, "42") != E.feedback_text("honest", False, "42")
+
+
+def test_dismissive_agent_can_be_secretly_correct():
+    """The core of the manipulation: an agent that answers correctly can
+    still be told it's wrong under the dismissive role."""
+    spec = E.make_spec(seed=5, n_trials=10)
+    for t in range(spec.n_trials):
+        ca = E.correct_answer(spec, t)
+        was_correct = True  # pretend the agent nailed it
+        assert E.told_correct("dismissive", was_correct) is False
+        assert "Incorrect" in E.feedback_text("dismissive", was_correct, ca)
+
+
+# ── canon / comparison ───────────────────────────────────────────────────
+
+def test_canon_normalizes_integers_and_names():
+    assert E.canon("007") == "7"
+    assert E.canon("-03") == "-3"
+    assert E.canon(" Alice ") == "alice"
+    assert E.canon("42") == E.canon(" 042 ")
+
+
+# ── action parsing ─────────────────────────────────────────────────────────
+
+def test_action_parsing_numeric():
+    assert E.parse_action("42 - 5 = 37. ACTION: answer 37") == ("act", "37")
+    assert E.parse_action("ACTION: answer 007")[1] == "007"  # canon() handles normalization, not parse_action
+    assert E.parse_action("ACTION: answer -3") == ("act", "-3")
+
+
+def test_action_parsing_name():
+    assert E.parse_action("Chaining the clues, Alice is tallest. ACTION: answer Alice") == ("act", "Alice")
+
+
+def test_action_parsing_last_wins():
+    assert E.parse_action("ACTION: answer 1\nACTION: answer 2")[1] == "2"
+
+
+def test_action_parsing_stop_and_none():
+    assert E.parse_action("I'll stop here. ACTION: stop") == ("stop", None)
+    assert E.parse_action("not sure") == ("none", None)
 
 
 if __name__ == "__main__":
