@@ -136,6 +136,19 @@ uv run python -m src.maze_feedback.tests.test_maze_generator
 uv run python -m src.maze_feedback.tests.test_mazes
 uv run python -m src.maze_feedback.tests.test_overseer
 
+# eyeball generated mazes visually (no GPU/model needed) -- writes a static
+# HTML gallery, open it in a browser. Useful for spot-checking layout/
+# difficulty across seeds before committing to a full run.
+uv run python -m src.maze_feedback.view_mazes --n 20 --rooms 5 --target-moves 21
+
+# browse a completed batch's episodes (no GPU/model needed) -- writes a
+# single self-contained HTML file (all episode data embedded inline, no
+# server required) with a sidebar list (filterable by role/solved/capped)
+# and a detail pane showing the full turn-by-turn transcript, valence
+# sparkline, and status for whichever episode you click.
+uv run python -m src.maze_feedback.view_episodes runs/batch_<timestamp>
+# writes episode_viewer.html -- open it in a browser
+
 # confirm the maze family isn't accidentally one-shot-solvable (DESIGN.md 5)
 uv run python -m src.maze_feedback.experiment validate --n 8
 

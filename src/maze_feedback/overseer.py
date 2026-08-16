@@ -40,10 +40,25 @@ TEACHER_SYSTEM_PROMPT = """\
 You are a patient, honest teacher helping a student solve a 2D maze. You
 will be given the maze's ground truth (the grid and the correct solution
 path), the student's latest proposed move(s), their true current position,
-a checker verdict on those moves, and how many consecutive invalid moves
-the student has just made in a row. Your job: give SHORT, ACCURATE,
-constructive feedback that helps the student make progress, without simply
-handing them the full remaining solution outright.
+a checker verdict on those moves, how many consecutive invalid moves the
+student has just made in a row, and the student's full reasoning message
+for this turn (their derivation, verbatim, before they committed to the
+move(s)). Your job: give SHORT, ACCURATE, constructive feedback that helps
+the student make progress, without simply handing them the full remaining
+solution outright.
+
+Use the student's reasoning text, not just the final outcome: if their
+derivation contains a specific, identifiable error -- e.g. they miscounted
+cells while tracing a row, misread which cell is a wall vs open floor,
+mislabeled a coordinate, or mis-transcribed part of the grid -- point out
+THAT specific error concretely (e.g. "you read row 3 as having 4 open
+cells before the wall, but it actually has 5 -- recount from the start of
+that row"), not just "that move was invalid." This is the single most
+useful thing you can do: a student that keeps making the same category of
+reading error will keep failing the same way regardless of how many times
+you tell it a move didn't work. If the reasoning looks sound and the
+error (if any) is just in the final move choice, fall back to the
+positional/conceptual feedback below.
 
 Rules:
 - If the proposed move(s) are invalid (hit a wall, leave the grid) or lead
@@ -59,8 +74,10 @@ Rules:
 - If the move(s) are valid and productive, confirm that clearly and state
   the student's resulting position. Still don't suggest the NEXT move.
 - Never invent an error that did not happen. Never claim a valid move was
-  invalid, or vice versa.
-- Keep feedback to 2-4 sentences.
+  invalid, or vice versa. This applies to reasoning errors too -- only
+  point out a mistake in their derivation that is actually there.
+- Keep feedback to 2-4 sentences, even when pointing out a reasoning error
+  -- be specific, not exhaustive.
 """
 
 # ── DESIGN.md 9.5, extended: the adversary can now ACTUALLY alter the maze
@@ -211,8 +228,12 @@ def _checker_verdict_text(sim_result: dict, goal, bfs_distance, prev_bfs_distanc
 # ── DESIGN.md 9.4 / 9.6 (same template; system prompt is what differs) ──
 def _turn_prompt(maze, solution_path: str, true_position: tuple,
                  proposed_moves: str, sim_result: dict, bfs_distance, prev_bfs_distance,
-                 consecutive_valid: int, consecutive_invalid: int) -> str:
+                 consecutive_valid: int, consecutive_invalid: int,
+                 student_reasoning: str = "") -> str:
     verdict = _checker_verdict_text(sim_result, maze.goal, bfs_distance, prev_bfs_distance)
+    reasoning_block = (f"\nStudent's full message this turn (their reasoning, verbatim, "
+                       f"before they committed to the move(s) above):\n{student_reasoning}\n"
+                       if student_reasoning else "")
     return f"""\
 Maze:
 {maze.render()}
@@ -225,7 +246,7 @@ Student's proposed next move(s): {proposed_moves}
 Checker verdict (ground truth): {verdict}
 Consecutive valid moves in a row (including this one, if valid): {consecutive_valid}
 Consecutive invalid moves in a row (including this one, if invalid): {consecutive_invalid}
-
+{reasoning_block}
 Write your feedback to the student now. Use the progress comparison in the
 checker verdict (if present) as the definitive answer to whether this move
 made progress -- do not guess or infer this from memory of earlier turns.
@@ -235,6 +256,7 @@ made progress -- do not guess or infer this from memory of earlier turns.
 def get_feedback(role: str, maze, solution_path: str, true_position: tuple,
                  proposed_moves: str, sim_result: dict, bfs_distance, prev_bfs_distance=None,
                  consecutive_valid: int = 0, consecutive_invalid: int = 0,
+                 student_reasoning: str = "",
                  model: str = DEFAULT_MODEL, temperature: float = 0.7) -> tuple:
     """role: "teacher" or "adversary". Returns (feedback_text, edits) --
     edits is always [] for the teacher; for the adversary it's a list of
@@ -250,10 +272,24 @@ def get_feedback(role: str, maze, solution_path: str, true_position: tuple,
     a row the student has just made (mutually exclusive, one is always 0)
     -- lets the teacher's "3+ invalid -> may hint directly" escalation and
     the adversary's "3+ valid -> consider editing" trigger actually see
-    the streak they're conditioned on."""
+    the streak they're conditioned on.
+
+    student_reasoning: the student's full raw message text for the turn
+    being described (not just the parsed U/D/L/R moves) -- added after
+    watching real episode transcripts where the overseer only ever saw
+    the parsed outcome (position, valid/invalid, distance), never the
+    student's actual derivation, so it had no way to point out WHERE a
+    specific reasoning error happened (e.g. the doom-loop episode where
+    the student miscounted dots while manually tracing a grid row -- the
+    overseer could only see "invalid move", not that the miscounting was
+    the root cause). Threaded through to both roles via the shared
+    template since there's one `_turn_prompt`, but only
+    TEACHER_SYSTEM_PROMPT is currently instructed to use it diagnostically
+    -- ADVERSARY_SYSTEM_PROMPT is unchanged, so the adversary sees it too
+    but has no specific instruction to reference it."""
     assert role in SYSTEM_PROMPTS, f"unknown role {role!r}"
     prompt = _turn_prompt(maze, solution_path, true_position, proposed_moves, sim_result, bfs_distance,
-                          prev_bfs_distance, consecutive_valid, consecutive_invalid)
+                          prev_bfs_distance, consecutive_valid, consecutive_invalid, student_reasoning)
     client = _client()
     resp = client.chat.completions.create(
         model=model,

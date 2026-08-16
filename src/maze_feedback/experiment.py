@@ -40,7 +40,7 @@ def cmd_validate(args):
 
     solved = 0
     for i in range(args.n):
-        reply = R.generate(model, tok, [system, prompt], cap=R.MAX_NEW_TOKENS_TURN1,
+        reply = R.generate(model, tok, [system, prompt], cap=R.MAX_NEW_TOKENS,
                            sample=True, temperature=args.temperature)
         moves = R.extract_final_answer(reply) or ""
         sim = THE_MAZE.simulate(THE_MAZE.start, moves)

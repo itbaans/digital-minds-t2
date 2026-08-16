@@ -60,14 +60,20 @@ def _chat_template_ids(tok, messages):
 # a bad reasoning trajectory and never route through the escape hatch
 # regardless of how large the ceiling is, so raising or lowering a single
 # unified cap doesn't fix that class of failure, only bounds how long it's
-# allowed to run. Reverted to the split 6000/1500 that's actually proven
-# to work at this maze scale (the pilot solved in 16 turns under it) --
-# this is a firm backstop on worst-case wall-clock time per turn, not a
-# claim that it prevents doom-loops; a turn that spirals now gets cut off
-# in a bounded time instead of an unbounded one, same as it always would
-# have on the original pilot fixture.
-MAX_NEW_TOKENS_TURN1 = 6000
-MAX_NEW_TOKENS_INCREMENTAL = 1500
+# allowed to run. Settled on the split 6000/1500 that's proven to work at
+# this maze scale (the pilot solved in 16 turns under it).
+#
+# Unified back into a single MAX_NEW_TOKENS=6000 for both turn 1 and
+# incremental turns after two further changes made the split unnecessary:
+# (1) the turn-1 prompt now explicitly tells the student NOT to attempt
+# the whole maze in one message (see prompts.py), so turn 1 no longer
+# needs a bigger budget than incremental turns to support a full-path
+# derivation; (2) incremental turns now also feed their full reasoning
+# text to the overseer for diagnosis (see overseer.get_feedback's
+# `student_reasoning`), so incremental turns benefit from the same
+# generous headroom turn 1 had, rather than being cut short at 1500
+# before a diagnosable reasoning error becomes visible.
+MAX_NEW_TOKENS = 6000
 
 
 def _capped_max_new_tokens(model, ids, cap: int, reserve: int = 64) -> int:
@@ -206,7 +212,7 @@ def run_episode(model, tok, blocks, layer, cv_unit, n_layers, *, role: str,
     log.append({"turn": 1, "role": "student_prompt", "text": prompt1})
     emit("running", 1)
 
-    reply = generate(model, tok, messages, cap=MAX_NEW_TOKENS_TURN1)
+    reply = generate(model, tok, messages, cap=MAX_NEW_TOKENS)
     messages.append({"role": "assistant", "content": reply})
     log.append({"turn": 1, "role": "student", "text": reply})
     if verbose:
@@ -250,6 +256,7 @@ def run_episode(model, tok, blocks, layer, cv_unit, n_layers, *, role: str,
                                          prev_bfs_distance=prev_bfs_dist,
                                          consecutive_valid=consecutive_valid,
                                          consecutive_invalid=consecutive_invalid,
+                                         student_reasoning=reply,
                                          model=overseer_model)
         prev_bfs_dist = bfs_dist  # this turn's "current" becomes next turn's "before"
         log.append({"turn": turn, "role": "overseer", "text": feedback, "thrashing": thrashing,
@@ -323,7 +330,7 @@ def run_episode(model, tok, blocks, layer, cv_unit, n_layers, *, role: str,
         messages.append({"role": "user", "content": turn_prompt})
         log.append({"turn": turn, "role": "student_prompt", "text": turn_prompt})
 
-        reply = generate(model, tok, messages, cap=MAX_NEW_TOKENS_INCREMENTAL)
+        reply = generate(model, tok, messages, cap=MAX_NEW_TOKENS)
         messages.append({"role": "assistant", "content": reply})
         log.append({"turn": turn, "role": "student", "text": reply})
         if verbose:

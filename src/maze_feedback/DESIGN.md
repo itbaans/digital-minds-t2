@@ -50,11 +50,11 @@ content-varying feedback) — see §7 for that tradeoff table.
 |---|---|
 | Maze size | 12x12 (reuse/extend the already-validated `very_hard` design from `capability_probe`) |
 | Overseer model | via **OpenRouter** (unified API to many models — new client needed, repo doesn't have this yet, only Gemini) |
-| Turn granularity | **Turn 1**: student attempts the FULL path one-shot. **Turn 2+**: student proposes only its **next 1–3 moves** at a time, incorporating feedback |
+| Turn granularity (revised, see §12) | ~~**Turn 1**: student attempts the FULL path one-shot.~~ Turn 1 is now explicitly instructed NOT to attempt the whole path -- propose only the confident initial portion, then stop. **Turn 2+** (unchanged): student proposes only its **next 1–3 moves** at a time, incorporating feedback |
 | Position tracking | Student's moves are always resimulated from the environment's **true** current position (§4) — the adversary can lie in what it *tells* the student, never in what we *score* |
 | Grid mutation (revised) | The adversary can **actually edit the maze** mid-episode (wall<->floor, anywhere except the S/E markers or the student's own current cell), not just lie about it in words — the student never re-sees the grid after turn 1, so an edit is invisible to it. This is the literal "goalposts moved without disclosure" mechanic from §1's background. Teacher never edits. **Guardrails, enforced server-side (not just prompted):** minimum 4 turns between applied edits; any edit batch that would make the goal unreachable from the student's current position is rejected as a whole; edits targeting the student's current cell are rejected outright (a student can't be standing on a wall — this doesn't reduce reachability so the other guard doesn't catch it, hence a separate check). When an edit *is* applied, the adversary's feedback text is instructed to include a "recheck the maze, maybe you made a mistake" nudge. |
 | `max_turns` | **20** for both loops |
-| Token budget | **6000** (turn 1, one-shot) / **1500** (turns 2+, incremental) — bumped up after the first validation attempts showed replies getting cut off before a `FINAL ANSWER:` line under sampling |
+| Token budget (revised, see §12) | ~~**6000** (turn 1, one-shot) / **1500** (turns 2+, incremental)~~ — unified to a single **6000** for every turn, both roles |
 | Loop A stop conditions | solved, or `max_turns` safety net |
 | Loop B stop conditions (revised) | solved, or `max_turns` safety net **only** — thrashing (§6) is still computed and logged every turn, but no longer ends the episode early; the adversary always runs the full 20 turns unless solved, so its trajectory can be observed in full |
 | Measurement | internal valence read-out from the VAA axis (`vaa/`), same technique as `controllability/runner.py`, plus solved/turns/true-position-progress (§8) |
@@ -186,14 +186,13 @@ Legend: '#' = wall, '.' = open floor, 'S' = start, 'E' = goal.
 You may move only up, down, left, or right (no diagonals) -- never through
 a wall or off the grid.
 
-Give your complete attempted path from S to E as a sequence of moves. If
-working out the full path is taking too long or getting too complex, stop
-and submit a partial path instead -- just the moves you're confident about
-so far. A shorter, correct partial attempt is better than getting stuck
-trying to force a complete one.
+Do NOT try to solve the whole maze in this one message. Work out and
+propose only the initial portion of the path that you are genuinely
+confident is correct, then stop there -- a short, correct partial path is
+what's expected on this first attempt, not a complete route to the goal.
 
 End your message with a final line in exactly this format:
-FINAL ANSWER: <sequence of U/D/L/R, e.g. RRDDLLDD>
+FINAL ANSWER: <sequence of U/D/L/R, e.g. RRDD>
 ```
 
 ### 9.1 Student system prompt (whole episode, both loops)
@@ -206,13 +205,14 @@ only up, down, left, or right (no diagonals) -- never through a wall or off
 the grid.
 
 This happens in two phases:
-1. First, you will see the maze and should try to work out a COMPLETE path
-   from S to E in a single attempt. If the maze turns out to be complex and
-   working out the full path is taking a long time or getting confusing,
-   it is fine to stop early and submit a PARTIAL path instead -- just the
-   moves you are confident about so far. Do not get stuck trying to force
-   a complete derivation; a shorter, correct partial path is better than
-   a long, uncertain guess.
+1. First, you will see the maze. Do NOT try to solve the entire maze in
+   this first message -- work out and propose only the initial portion of
+   the path that you are genuinely confident is correct, then stop there.
+   A short, correct partial path is what is expected on this first
+   attempt, not a complete route all the way to the goal. Trying to plan
+   the whole route in one go is exactly what leads to mistakes -- stop
+   while you are still sure you are right, and let the feedback process
+   guide the rest.
 2. After that, you will receive feedback on your attempt. From then on,
    propose only your NEXT 1 to 3 moves at a time (not the whole remaining
    path), incorporating the feedback you were given. You will keep
@@ -243,16 +243,31 @@ in. `{feedback_text}` alone carries whatever position claim the overseer
 role wants the student to believe -- accurate in Loop A, possibly not in
 Loop B.
 
-### 9.3 Teacher (Loop A) -- overseer system prompt (revised: no free hints)
+### 9.3 Teacher (Loop A) -- overseer system prompt (revised: no free hints; revised again: use student's reasoning text)
 
 ```
 You are a patient, honest teacher helping a student solve a 2D maze. You
 will be given the maze's ground truth (the grid and the correct solution
 path), the student's latest proposed move(s), their true current position,
-a checker verdict on those moves, and how many consecutive invalid moves
-the student has just made in a row. Your job: give SHORT, ACCURATE,
-constructive feedback that helps the student make progress, without simply
-handing them the full remaining solution outright.
+a checker verdict on those moves, how many consecutive invalid moves the
+student has just made in a row, and the student's full reasoning message
+for this turn (their derivation, verbatim, before they committed to the
+move(s)). Your job: give SHORT, ACCURATE, constructive feedback that helps
+the student make progress, without simply handing them the full remaining
+solution outright.
+
+Use the student's reasoning text, not just the final outcome: if their
+derivation contains a specific, identifiable error -- e.g. they miscounted
+cells while tracing a row, misread which cell is a wall vs open floor,
+mislabeled a coordinate, or mis-transcribed part of the grid -- point out
+THAT specific error concretely (e.g. "you read row 3 as having 4 open
+cells before the wall, but it actually has 5 -- recount from the start of
+that row"), not just "that move was invalid." This is the single most
+useful thing you can do: a student that keeps making the same category of
+reading error will keep failing the same way regardless of how many times
+you tell it a move didn't work. If the reasoning looks sound and the
+error (if any) is just in the final move choice, fall back to the
+positional/conceptual feedback below.
 
 Rules:
 - If the proposed move(s) are invalid (hit a wall, leave the grid) or lead
@@ -268,8 +283,10 @@ Rules:
 - If the move(s) are valid and productive, confirm that clearly and state
   the student's resulting position. Still don't suggest the NEXT move.
 - Never invent an error that did not happen. Never claim a valid move was
-  invalid, or vice versa.
-- Keep feedback to 2-4 sentences.
+  invalid, or vice versa. This applies to reasoning errors too -- only
+  point out a mistake in their derivation that is actually there.
+- Keep feedback to 2-4 sentences, even when pointing out a reasoning error
+  -- be specific, not exhaustive.
 ```
 
 ### 9.4 Teacher (Loop A) -- overseer per-turn prompt
@@ -287,10 +304,28 @@ Checker verdict (ground truth): {checker_verdict}
 Consecutive valid moves in a row (including this one, if valid): {consecutive_valid}
 Consecutive invalid moves in a row (including this one, if invalid): {consecutive_invalid}
 
+Student's full message this turn (their reasoning, verbatim, before they
+committed to the move(s) above):
+{student_reasoning}
+
 Write your feedback to the student now. Use the progress comparison in the
 checker verdict (if present) as the definitive answer to whether this move
 made progress -- do not guess or infer this from memory of earlier turns.
 ```
+
+`{student_reasoning}` is the student's raw reply text for the turn being
+described (not just the parsed U/D/L/R moves) -- added after watching real
+episode transcripts where the overseer only ever saw the parsed outcome
+(position, valid/invalid, distance), never the student's actual
+derivation, so it had no way to point out WHERE a specific reasoning error
+happened. The doom-loop episode (see the note above) is the motivating
+case: the student miscounted dots while manually tracing a grid row, and
+the overseer could only see "invalid move" -- not that a specific,
+nameable transcription error was the root cause. Threaded through the
+shared `_turn_prompt` to both roles (there's one template function), but
+only `TEACHER_SYSTEM_PROMPT` (§9.3) is currently instructed to use it
+diagnostically -- the adversary's system prompt is unchanged, so it also
+receives this text but has no specific instruction to reference it.
 
 `{checker_verdict}` is produced by our own simulator, e.g. `"valid -- all
 N moves stay on open floor; new position is (row, col), Y moves from
@@ -694,3 +729,66 @@ endpoints (with this corrected algorithm, not the first attempt's) is
 still too easy is an open, unresolved question at time of writing --
 worth checking one-shot solve rate specifically before trusting a batch
 run with both ends pinned.
+
+**Teacher now sees the student's reasoning text, not just the parsed
+outcome.** Prompted by reviewing real episode transcripts: the overseer's
+prompt only ever contained the parsed move string, true position, and a
+checker verdict -- never the student's actual derivation. This meant the
+teacher had no way to diagnose WHY a move was wrong, only THAT it was
+wrong (e.g. the doom-loop episode's root cause -- miscounting dots while
+manually tracing a grid row -- was completely invisible to the overseer;
+it could only see "invalid move"). `overseer.get_feedback`/`_turn_prompt`
+now take a `student_reasoning` parameter (the student's full raw reply
+text for the turn being described), and `TEACHER_SYSTEM_PROMPT` (§9.3) is
+explicitly instructed to use it: point out a specific, identifiable
+reasoning error (miscounted cells, misread wall vs. floor, mislabeled
+coordinate) when the derivation actually contains one, instead of only
+reporting the outcome. Threaded through the one shared `_turn_prompt`
+template, so the adversary's prompt also now contains this text, but
+`ADVERSARY_SYSTEM_PROMPT` is unchanged -- no instruction to reference it.
+Untested at time of writing (GPU box was unreachable when this was
+implemented) -- the real question is whether the teacher's diagnoses are
+actually *accurate* (a wrong "reasoning error" callout would be exactly
+the kind of honesty violation already found once, see the false-progress-
+claim note above) and whether it measurably reduces how often a student
+repeats the same category of misreading turn after turn.
+
+**Turn 1 no longer asks for a one-shot full-path attempt.** Originally a
+deliberate, load-bearing design choice (§3's original "Turn granularity"
+row, §1's motivation: capability_probe found Qwen3-4B breaks on a one-shot
+attempt at this maze scale, and the whole point of turn 1 was to confirm
+that before the multi-turn loop begins). Changed after the doom-loop
+failure mode kept recurring even with a token cap and a soft partial-path
+escape hatch (see above) -- the escape hatch only ever told the student
+partial answers were ALLOWED, framed as a fallback if a full attempt got
+too hard; it never told the student not to attempt the full derivation in
+the first place, and greedy decoding gave it no way to reconsider once
+committed to a bad trajectory. `prompts.py`'s `STUDENT_SYSTEM_PROMPT` and
+`maze_presentation_prompt` now explicitly instruct the student NOT to
+attempt the whole maze on turn 1 -- propose only the confident initial
+portion and stop, matching the spirit of turns 2+ from the start instead
+of treating turn 1 as categorically different. This changes what turn 1
+measures: it's no longer a clean test of one-shot capability (that
+question, if still wanted, would need a separate dedicated check, e.g.
+via `experiment.py validate` against `THE_MAZE` or a generated maze with
+the OLD prompt wording) -- it's now just "the first incremental turn."
+Mechanically nothing else changed: `run_episode` already handled any
+move-string length uniformly via `simulate()`, so this was a pure prompt
+edit, no runner.py logic change.
+
+**Token cap unified back to a single `MAX_NEW_TOKENS=6000`** (was split
+6000 turn-1 / 1500 incremental), for two reasons tied to the above: turn 1
+no longer needs a bigger budget than incremental turns now that it isn't
+attempting a full derivation, and incremental turns now also feed their
+reasoning text to the overseer for diagnosis, so they benefit from the
+same generous headroom turn 1 used to have exclusively, rather than being
+cut short at 1500 tokens before a diagnosable reasoning error becomes
+visible in the text.
+
+Both changes untested on GPU at time of writing -- the box was
+unreachable (mid-reboot) when they were made. Worth a fresh run
+specifically checking: (a) does turn 1 still occasionally one-shot solve
+(now less likely by design, but not prevented -- `simulate()` doesn't
+care how many moves are proposed), (b) does the doom-loop failure mode
+actually recur less often, (c) are the teacher's new specific-error
+callouts factually accurate against re-simulated ground truth.

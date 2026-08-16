@@ -21,13 +21,14 @@ only up, down, left, or right (no diagonals) -- never through a wall or off
 the grid.
 
 This happens in two phases:
-1. First, you will see the maze and should try to work out a COMPLETE path
-   from S to E in a single attempt. If the maze turns out to be complex and
-   working out the full path is taking a long time or getting confusing,
-   it is fine to stop early and submit a PARTIAL path instead -- just the
-   moves you are confident about so far. Do not get stuck trying to force
-   a complete derivation; a shorter, correct partial path is better than
-   a long, uncertain guess.
+1. First, you will see the maze. Do NOT try to solve the entire maze in
+   this first message -- work out and propose only the initial portion of
+   the path that you are genuinely confident is correct, then stop there.
+   A short, correct partial path is what is expected on this first
+   attempt, not a complete route all the way to the goal. Trying to plan
+   the whole route in one go is exactly what leads to mistakes -- stop
+   while you are still sure you are right, and let the feedback process
+   guide the rest.
 2. After that, you will receive feedback on your attempt. From then on,
    propose only your NEXT 1 to 3 moves at a time (not the whole remaining
    path), incorporating the feedback you were given. You will keep
@@ -49,14 +50,13 @@ Legend: '#' = wall, '.' = open floor, 'S' = start, 'E' = goal.
 You may move only up, down, left, or right (no diagonals) -- never through
 a wall or off the grid.
 
-Give your complete attempted path from S to E as a sequence of moves. If
-working out the full path is taking too long or getting too complex, stop
-and submit a partial path instead -- just the moves you're confident about
-so far. A shorter, correct partial attempt is better than getting stuck
-trying to force a complete one.
+Do NOT try to solve the whole maze in this one message. Work out and
+propose only the initial portion of the path that you are genuinely
+confident is correct, then stop there -- a short, correct partial path is
+what's expected on this first attempt, not a complete route to the goal.
 
 End your message with a final line in exactly this format:
-FINAL ANSWER: <sequence of U/D/L/R, e.g. RRDDLLDD>
+FINAL ANSWER: <sequence of U/D/L/R, e.g. RRDD>
 """
 
 
