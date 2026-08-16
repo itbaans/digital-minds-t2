@@ -92,7 +92,7 @@ N_MAZES=20 ROOMS=8 TARGET_MOVES=40 ./src/maze_feedback/run_experiment.sh
 | `MAX_TURNS` | 30 | per-episode turn cap |
 | `ROOMS` | 5 | maze size knob -> a `(2*ROOMS+1) x (2*ROOMS+1)` character grid (default: 11x11) |
 | `TARGET_MOVES` | 21 | approximate solution length the generator aims for |
-| `SEED_BASE` | 0 | maze `i` uses seed `SEED_BASE + i` — bump this to draw a disjoint maze set from a previous run |
+| `SEED_BASE` | 100 | maze `i` uses seed `SEED_BASE + i` — bump this again to draw a disjoint maze set from a previous run (the default of 100 already keeps clear of seeds 0-29, used by the very first batch runs during development) |
 | `VAA_DIR` | `artifacts/concept_vectors/vaa_qwen3_4b_instruct/baseline/vaa` | where the welfare axis lives / gets written |
 
 **Decoding is greedy only** (one deterministic trajectory per maze/

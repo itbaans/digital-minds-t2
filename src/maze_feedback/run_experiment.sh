@@ -30,7 +30,7 @@ N_MAZES="${N_MAZES:-10}"
 MAX_TURNS="${MAX_TURNS:-30}"
 ROOMS="${ROOMS:-5}"
 TARGET_MOVES="${TARGET_MOVES:-21}"
-SEED_BASE="${SEED_BASE:-0}"
+SEED_BASE="${SEED_BASE:-100}"
 
 echo "== maze_feedback batch experiment =="
 echo "repo root: $REPO_ROOT"
