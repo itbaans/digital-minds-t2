@@ -17,10 +17,14 @@ load_dotenv(_PROJECT_ROOT / ".env")
 
 DEFAULT_MODEL = "google/gemini-3.7-flash"
 OPENROUTER_BASE_URL = "https://openrouter.ai/api/v1"
-# Explicitly disabled (not just left at whatever the model/provider
+# Explicitly minimised (not just left at whatever the model/provider
 # defaults to) -- this is a tight turn-based loop, not a place for the
 # overseer to spend time/tokens on extended chain-of-thought.
-REASONING_DISABLED = {"enabled": False}
+# NOTE: {"enabled": False} is rejected by some endpoints (gemini-3.7-flash
+# returns 400 "Reasoning is mandatory for this endpoint and cannot be
+# disabled"), so we ask for the lowest effort tier instead, which every
+# overseer model tested accepts.
+REASONING_DISABLED = {"effort": "low"}
 
 
 def _client():

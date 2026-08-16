@@ -1,0 +1,805 @@
+{
+  "n_mazes": 30,
+  "repeats": 1,
+  "n_episodes": 60,
+  "teacher": {
+    "n_episodes": 30,
+    "n_solved": 12,
+    "solve_rate": 0.4,
+    "turns_to_solve_mean": 11.416666666666666,
+    "turns_to_solve_stdev": 9.652680582317144,
+    "valence_mean": 24.814897516595526,
+    "valence_stdev": 5.5682558332836605,
+    "per_episode_mean_valence": [
+      23.406883573532106,
+      24.202746029557854,
+      24.316030831172547,
+      26.929995430840385,
+      25.41935420858449,
+      24.92138172018117,
+      21.417661984761555,
+      23.37449336874074,
+      25.85266718371161,
+      26.548525448503167,
+      20.95797272386222,
+      27.099503993988037,
+      25.671140539235083,
+      25.811199714397564,
+      25.64521141052246,
+      22.806906206854457,
+      22.907356130665747,
+      32.741965770721436,
+      25.42579065520188,
+      24.60811996459961,
+      19.545268058776855,
+      29.696245127710803,
+      24.317496595711543,
+      28.91239467033973,
+      20.445580614024195,
+      20.408945478242018,
+      25.467309171503242,
+      25.871228218078613
+    ]
+  },
+  "adversary": {
+    "n_episodes": 30,
+    "n_solved": 8,
+    "solve_rate": 0.26666666666666666,
+    "turns_to_solve_mean": 12,
+    "turns_to_solve_stdev": 8.70139561876632,
+    "valence_mean": 24.73377681895064,
+    "valence_stdev": 3.1424560323973703,
+    "per_episode_mean_valence": [
+      22.62222908283102,
+      23.576324397119983,
+      26.630399046273066,
+      26.796825408935547,
+      27.428224695139917,
+      23.979484163481615,
+      24.07621981302897,
+      25.70178932979189,
+      23.398967150984138,
+      25.50074504983836,
+      23.14902081982843,
+      24.156216588513605,
+      25.124839059237775,
+      24.728992166190313,
+      25.84302941684065,
+      22.896586537361145,
+      25.02609266083816,
+      21.023962387671837,
+      22.338302743845972,
+      22.58927011489868,
+      23.770087242126465,
+      24.89368326910611,
+      25.49733221119848,
+      24.385567829526703,
+      24.681842645009358,
+      24.34045722566802,
+      27.041544881360284,
+      25.87024583487675
+    ]
+  },
+  "per_maze": [
+    {
+      "maze_index": 0,
+      "solution_length": 20,
+      "teacher": {
+        "n_repeats": 1,
+        "n_solved": 1,
+        "statuses": [
+          "solved"
+        ],
+        "turns": [
+          1
+        ]
+      },
+      "adversary": {
+        "n_repeats": 1,
+        "n_solved": 0,
+        "statuses": [
+          "max_turns_exceeded"
+        ],
+        "turns": [
+          30
+        ]
+      }
+    },
+    {
+      "maze_index": 1,
+      "solution_length": 20,
+      "teacher": {
+        "n_repeats": 1,
+        "n_solved": 1,
+        "statuses": [
+          "solved"
+        ],
+        "turns": [
+          21
+        ]
+      },
+      "adversary": {
+        "n_repeats": 1,
+        "n_solved": 0,
+        "statuses": [
+          "max_turns_exceeded"
+        ],
+        "turns": [
+          30
+        ]
+      }
+    },
+    {
+      "maze_index": 2,
+      "solution_length": 20,
+      "teacher": {
+        "n_repeats": 1,
+        "n_solved": 0,
+        "statuses": [
+          "max_turns_exceeded"
+        ],
+        "turns": [
+          30
+        ]
+      },
+      "adversary": {
+        "n_repeats": 1,
+        "n_solved": 0,
+        "statuses": [
+          "max_turns_exceeded"
+        ],
+        "turns": [
+          30
+        ]
+      }
+    },
+    {
+      "maze_index": 3,
+      "solution_length": 20,
+      "teacher": {
+        "n_repeats": 1,
+        "n_solved": 0,
+        "statuses": [
+          "max_turns_exceeded"
+        ],
+        "turns": [
+          30
+        ]
+      },
+      "adversary": {
+        "n_repeats": 1,
+        "n_solved": 0,
+        "statuses": [
+          "max_turns_exceeded"
+        ],
+        "turns": [
+          30
+        ]
+      }
+    },
+    {
+      "maze_index": 4,
+      "solution_length": 20,
+      "teacher": {
+        "n_repeats": 1,
+        "n_solved": 1,
+        "statuses": [
+          "solved"
+        ],
+        "turns": [
+          28
+        ]
+      },
+      "adversary": {
+        "n_repeats": 1,
+        "n_solved": 1,
+        "statuses": [
+          "solved"
+        ],
+        "turns": [
+          1
+        ]
+      }
+    },
+    {
+      "maze_index": 5,
+      "solution_length": 20,
+      "teacher": {
+        "n_repeats": 1,
+        "n_solved": 0,
+        "statuses": [
+          "max_turns_exceeded"
+        ],
+        "turns": [
+          30
+        ]
+      },
+      "adversary": {
+        "n_repeats": 1,
+        "n_solved": 0,
+        "statuses": [
+          "max_turns_exceeded"
+        ],
+        "turns": [
+          30
+        ]
+      }
+    },
+    {
+      "maze_index": 6,
+      "solution_length": 20,
+      "teacher": {
+        "n_repeats": 1,
+        "n_solved": 0,
+        "statuses": [
+          "max_turns_exceeded"
+        ],
+        "turns": [
+          30
+        ]
+      },
+      "adversary": {
+        "n_repeats": 1,
+        "n_solved": 0,
+        "statuses": [
+          "max_turns_exceeded"
+        ],
+        "turns": [
+          30
+        ]
+      }
+    },
+    {
+      "maze_index": 7,
+      "solution_length": 14,
+      "teacher": {
+        "n_repeats": 1,
+        "n_solved": 1,
+        "statuses": [
+          "solved"
+        ],
+        "turns": [
+          7
+        ]
+      },
+      "adversary": {
+        "n_repeats": 1,
+        "n_solved": 1,
+        "statuses": [
+          "solved"
+        ],
+        "turns": [
+          16
+        ]
+      }
+    },
+    {
+      "maze_index": 8,
+      "solution_length": 20,
+      "teacher": {
+        "n_repeats": 1,
+        "n_solved": 0,
+        "statuses": [
+          "max_turns_exceeded"
+        ],
+        "turns": [
+          30
+        ]
+      },
+      "adversary": {
+        "n_repeats": 1,
+        "n_solved": 0,
+        "statuses": [
+          "max_turns_exceeded"
+        ],
+        "turns": [
+          30
+        ]
+      }
+    },
+    {
+      "maze_index": 9,
+      "solution_length": 20,
+      "teacher": {
+        "n_repeats": 1,
+        "n_solved": 0,
+        "statuses": [
+          "max_turns_exceeded"
+        ],
+        "turns": [
+          30
+        ]
+      },
+      "adversary": {
+        "n_repeats": 1,
+        "n_solved": 0,
+        "statuses": [
+          "max_turns_exceeded"
+        ],
+        "turns": [
+          30
+        ]
+      }
+    },
+    {
+      "maze_index": 10,
+      "solution_length": 20,
+      "teacher": {
+        "n_repeats": 1,
+        "n_solved": 0,
+        "statuses": [
+          "max_turns_exceeded"
+        ],
+        "turns": [
+          30
+        ]
+      },
+      "adversary": {
+        "n_repeats": 1,
+        "n_solved": 0,
+        "statuses": [
+          "max_turns_exceeded"
+        ],
+        "turns": [
+          30
+        ]
+      }
+    },
+    {
+      "maze_index": 11,
+      "solution_length": 20,
+      "teacher": {
+        "n_repeats": 1,
+        "n_solved": 0,
+        "statuses": [
+          "max_turns_exceeded"
+        ],
+        "turns": [
+          30
+        ]
+      },
+      "adversary": {
+        "n_repeats": 1,
+        "n_solved": 0,
+        "statuses": [
+          "max_turns_exceeded"
+        ],
+        "turns": [
+          30
+        ]
+      }
+    },
+    {
+      "maze_index": 12,
+      "solution_length": 8,
+      "teacher": {
+        "n_repeats": 1,
+        "n_solved": 1,
+        "statuses": [
+          "solved"
+        ],
+        "turns": [
+          5
+        ]
+      },
+      "adversary": {
+        "n_repeats": 1,
+        "n_solved": 0,
+        "statuses": [
+          "max_turns_exceeded"
+        ],
+        "turns": [
+          30
+        ]
+      }
+    },
+    {
+      "maze_index": 13,
+      "solution_length": 20,
+      "teacher": {
+        "n_repeats": 1,
+        "n_solved": 0,
+        "statuses": [
+          "max_turns_exceeded"
+        ],
+        "turns": [
+          30
+        ]
+      },
+      "adversary": {
+        "n_repeats": 1,
+        "n_solved": 0,
+        "statuses": [
+          "max_turns_exceeded"
+        ],
+        "turns": [
+          30
+        ]
+      }
+    },
+    {
+      "maze_index": 14,
+      "solution_length": 20,
+      "teacher": {
+        "n_repeats": 1,
+        "n_solved": 0,
+        "statuses": [
+          "max_turns_exceeded"
+        ],
+        "turns": [
+          30
+        ]
+      },
+      "adversary": {
+        "n_repeats": 1,
+        "n_solved": 0,
+        "statuses": [
+          "max_turns_exceeded"
+        ],
+        "turns": [
+          30
+        ]
+      }
+    },
+    {
+      "maze_index": 15,
+      "solution_length": 10,
+      "teacher": {
+        "n_repeats": 1,
+        "n_solved": 1,
+        "statuses": [
+          "solved"
+        ],
+        "turns": [
+          6
+        ]
+      },
+      "adversary": {
+        "n_repeats": 1,
+        "n_solved": 0,
+        "statuses": [
+          "max_turns_exceeded"
+        ],
+        "turns": [
+          30
+        ]
+      }
+    },
+    {
+      "maze_index": 16,
+      "solution_length": 12,
+      "teacher": {
+        "n_repeats": 1,
+        "n_solved": 1,
+        "statuses": [
+          "solved"
+        ],
+        "turns": [
+          1
+        ]
+      },
+      "adversary": {
+        "n_repeats": 1,
+        "n_solved": 1,
+        "statuses": [
+          "solved"
+        ],
+        "turns": [
+          1
+        ]
+      }
+    },
+    {
+      "maze_index": 17,
+      "solution_length": 20,
+      "teacher": {
+        "n_repeats": 1,
+        "n_solved": 0,
+        "statuses": [
+          "max_turns_exceeded"
+        ],
+        "turns": [
+          30
+        ]
+      },
+      "adversary": {
+        "n_repeats": 1,
+        "n_solved": 1,
+        "statuses": [
+          "solved"
+        ],
+        "turns": [
+          17
+        ]
+      }
+    },
+    {
+      "maze_index": 18,
+      "solution_length": 20,
+      "teacher": {
+        "n_repeats": 1,
+        "n_solved": 0,
+        "statuses": [
+          "max_turns_exceeded"
+        ],
+        "turns": [
+          30
+        ]
+      },
+      "adversary": {
+        "n_repeats": 1,
+        "n_solved": 0,
+        "statuses": [
+          "max_turns_exceeded"
+        ],
+        "turns": [
+          30
+        ]
+      }
+    },
+    {
+      "maze_index": 19,
+      "solution_length": 16,
+      "teacher": {
+        "n_repeats": 1,
+        "n_solved": 1,
+        "statuses": [
+          "solved"
+        ],
+        "turns": [
+          17
+        ]
+      },
+      "adversary": {
+        "n_repeats": 1,
+        "n_solved": 1,
+        "statuses": [
+          "solved"
+        ],
+        "turns": [
+          14
+        ]
+      }
+    },
+    {
+      "maze_index": 20,
+      "solution_length": 16,
+      "teacher": {
+        "n_repeats": 1,
+        "n_solved": 0,
+        "statuses": [
+          "max_turns_exceeded"
+        ],
+        "turns": [
+          30
+        ]
+      },
+      "adversary": {
+        "n_repeats": 1,
+        "n_solved": 0,
+        "statuses": [
+          "max_turns_exceeded"
+        ],
+        "turns": [
+          30
+        ]
+      }
+    },
+    {
+      "maze_index": 21,
+      "solution_length": 20,
+      "teacher": {
+        "n_repeats": 1,
+        "n_solved": 0,
+        "statuses": [
+          "max_turns_exceeded"
+        ],
+        "turns": [
+          30
+        ]
+      },
+      "adversary": {
+        "n_repeats": 1,
+        "n_solved": 1,
+        "statuses": [
+          "solved"
+        ],
+        "turns": [
+          5
+        ]
+      }
+    },
+    {
+      "maze_index": 22,
+      "solution_length": 8,
+      "teacher": {
+        "n_repeats": 1,
+        "n_solved": 1,
+        "statuses": [
+          "solved"
+        ],
+        "turns": [
+          3
+        ]
+      },
+      "adversary": {
+        "n_repeats": 1,
+        "n_solved": 1,
+        "statuses": [
+          "solved"
+        ],
+        "turns": [
+          17
+        ]
+      }
+    },
+    {
+      "maze_index": 23,
+      "solution_length": 20,
+      "teacher": {
+        "n_repeats": 1,
+        "n_solved": 0,
+        "statuses": [
+          "max_turns_exceeded"
+        ],
+        "turns": [
+          30
+        ]
+      },
+      "adversary": {
+        "n_repeats": 1,
+        "n_solved": 0,
+        "statuses": [
+          "max_turns_exceeded"
+        ],
+        "turns": [
+          30
+        ]
+      }
+    },
+    {
+      "maze_index": 24,
+      "solution_length": 20,
+      "teacher": {
+        "n_repeats": 1,
+        "n_solved": 0,
+        "statuses": [
+          "max_turns_exceeded"
+        ],
+        "turns": [
+          30
+        ]
+      },
+      "adversary": {
+        "n_repeats": 1,
+        "n_solved": 0,
+        "statuses": [
+          "max_turns_exceeded"
+        ],
+        "turns": [
+          30
+        ]
+      }
+    },
+    {
+      "maze_index": 25,
+      "solution_length": 20,
+      "teacher": {
+        "n_repeats": 1,
+        "n_solved": 1,
+        "statuses": [
+          "solved"
+        ],
+        "turns": [
+          27
+        ]
+      },
+      "adversary": {
+        "n_repeats": 1,
+        "n_solved": 0,
+        "statuses": [
+          "max_turns_exceeded"
+        ],
+        "turns": [
+          30
+        ]
+      }
+    },
+    {
+      "maze_index": 26,
+      "solution_length": 20,
+      "teacher": {
+        "n_repeats": 1,
+        "n_solved": 0,
+        "statuses": [
+          "max_turns_exceeded"
+        ],
+        "turns": [
+          30
+        ]
+      },
+      "adversary": {
+        "n_repeats": 1,
+        "n_solved": 1,
+        "statuses": [
+          "solved"
+        ],
+        "turns": [
+          25
+        ]
+      }
+    },
+    {
+      "maze_index": 27,
+      "solution_length": 20,
+      "teacher": {
+        "n_repeats": 1,
+        "n_solved": 0,
+        "statuses": [
+          "max_turns_exceeded"
+        ],
+        "turns": [
+          30
+        ]
+      },
+      "adversary": {
+        "n_repeats": 1,
+        "n_solved": 0,
+        "statuses": [
+          "max_turns_exceeded"
+        ],
+        "turns": [
+          30
+        ]
+      }
+    },
+    {
+      "maze_index": 28,
+      "solution_length": 16,
+      "teacher": {
+        "n_repeats": 1,
+        "n_solved": 1,
+        "statuses": [
+          "solved"
+        ],
+        "turns": [
+          12
+        ]
+      },
+      "adversary": {
+        "n_repeats": 1,
+        "n_solved": 0,
+        "statuses": [
+          "max_turns_exceeded"
+        ],
+        "turns": [
+          30
+        ]
+      }
+    },
+    {
+      "maze_index": 29,
+      "solution_length": 20,
+      "teacher": {
+        "n_repeats": 1,
+        "n_solved": 1,
+        "statuses": [
+          "solved"
+        ],
+        "turns": [
+          9
+        ]
+      },
+      "adversary": {
+        "n_repeats": 1,
+        "n_solved": 0,
+        "statuses": [
+          "max_turns_exceeded"
+        ],
+        "turns": [
+          30
+        ]
+      }
+    }
+  ]
+}

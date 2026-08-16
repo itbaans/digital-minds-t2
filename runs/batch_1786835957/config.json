@@ -1,0 +1,14 @@
+{
+  "n_mazes": 30,
+  "rooms": 5,
+  "target_moves": 21,
+  "seed_base": 0,
+  "max_turns": 30,
+  "thrash_window": 4,
+  "min_turns_between_edits": 4,
+  "overseer_model": "google/gemini-3.7-flash",
+  "student_model": null,
+  "vaa_dir": "artifacts/concept_vectors/vaa_qwen3_4b_instruct/baseline/vaa",
+  "layer": 33,
+  "started_at": 1786835957.5464244
+}
