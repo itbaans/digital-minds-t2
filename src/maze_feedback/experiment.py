@@ -25,7 +25,7 @@ from src.controllability.axis import load_axis
 from . import analyze as A
 from . import prompts as P
 from . import runner as R
-from .maze_generator import generate_maze
+from .maze_generator import generate_maze, generate_sparse_maze, open_fraction
 from .mazes import THE_MAZE, THE_MAZE_SOLUTION
 from .overseer import DEFAULT_MODEL as DEFAULT_OVERSEER_MODEL
 
@@ -103,7 +103,29 @@ def cmd_batch(args):
     running 4 worker processes concurrently pushed a single 80GB GPU to 98%
     VRAM in testing -- not worth the operational risk at this experiment's
     scale. See DESIGN.md 12 for the numbers behind that call; both are
-    reasonable to revisit later with more headroom or tighter caps."""
+    reasonable to revisit later with more headroom or tighter caps.
+
+    `--maze-mode sparse` (default) uses `generate_sparse_maze` -- path plus
+    a few deliberate dead-end traps, matching THE_MAZE (the original
+    hand-drawn pilot fixture)'s density. `--maze-mode dense` uses the
+    original `generate_maze` -- a full spanning tree, ~40-42% open floor
+    regardless of parameters, structurally different from THE_MAZE (see
+    DESIGN.md 12 for the density comparison and why it might matter: a
+    denser maze isn't topologically harder to solve, since generate_maze is
+    also a spanning tree with no loops, but has more consecutive open cells
+    to correctly count while manually tracing a row, which is plausibly
+    linked to the doom-loop failure mode found during development).
+
+    `--pad-to` (default 12, sparse mode's natural rooms=5 size is 11x11)
+    pads out to an exact grid size matching THE_MAZE's 12x12. `--density-min`/
+    `--density-max` (default 0.19/0.22, sparse mode only, ignored for dense)
+    strictly enforce THE_MAZE's ~21% open-floor density on every generated
+    maze via `generate_sparse_maze`'s density_range search -- see that
+    function's docstring for how it searches trap depth/count on the seed's
+    own tree, and falls back to deterministically-derived alternate seeds
+    if a given seed's tree can't reach the band. Pass `--no-density-constraint`
+    to disable and get raw (uncontrolled, more variable) density like
+    earlier runs."""
     model, tok, blocks = R.load_student(args.model)
     layer, cv_raw, cv_unit, n_layers = load_axis(args.vaa_dir, args.layer)
     print(f"[axis] layer {layer} | |cv|={float(cv_raw.norm()):.3f}")
@@ -114,8 +136,14 @@ def cmd_batch(args):
     mazes_dir.mkdir(parents=True, exist_ok=True)
     episodes_dir.mkdir(parents=True, exist_ok=True)
 
+    density_range = None
+    if args.maze_mode == "sparse" and not args.no_density_constraint:
+        density_range = (args.density_min, args.density_max)
+
     config = {
-        "n_mazes": args.n_mazes, "rooms": args.rooms, "target_moves": args.target_moves,
+        "n_mazes": args.n_mazes, "maze_mode": args.maze_mode, "rooms": args.rooms,
+        "target_moves": args.target_moves, "n_traps": args.n_traps, "pad_to": args.pad_to,
+        "density_range": list(density_range) if density_range else None,
         "seed_base": args.seed_base, "max_turns": args.max_turns,
         "thrash_window": args.thrash_window, "min_turns_between_edits": args.min_turns_between_edits,
         "overseer_model": args.overseer_model, "student_model": args.model,
@@ -123,21 +151,28 @@ def cmd_batch(args):
     }
     json.dump(config, open(out_dir / "config.json", "w"), indent=2)
     n_episodes = args.n_mazes * 2
-    print(f"[batch] {args.n_mazes} mazes x 2 conditions = {n_episodes} episodes -- writing results to {out_dir}")
+    print(f"[batch] {args.n_mazes} mazes ({args.maze_mode} mode) x 2 conditions "
+          f"= {n_episodes} episodes -- writing results to {out_dir}")
 
     for i in range(args.n_mazes):
         seed = args.seed_base + i
-        maze = generate_maze(seed, rooms=args.rooms, target_moves=args.target_moves)
+        if args.maze_mode == "sparse":
+            maze = generate_sparse_maze(seed, rooms=args.rooms, target_moves=args.target_moves,
+                                        n_traps=args.n_traps, pad_to=args.pad_to,
+                                        density_range=density_range)
+        else:
+            maze = generate_maze(seed, rooms=args.rooms, target_moves=args.target_moves, pad_to=args.pad_to)
         solution_path = maze.bfs_path_to_goal(maze.start)
         assert solution_path is not None, f"generated maze seed={seed} has no path -- generator bug"
+        density = open_fraction(maze)
         json.dump(
             {"seed": seed, "grid": list(maze.grid), "start": list(maze.start),
              "goal": list(maze.goal), "solution_path": solution_path,
-             "solution_length": len(solution_path)},
+             "solution_length": len(solution_path), "open_fraction": density},
             open(mazes_dir / f"maze_{i:02d}.json", "w"), indent=2,
         )
         print(f"\n===== maze {i + 1}/{args.n_mazes} (seed={seed}, "
-              f"{len(solution_path)}-move solution) =====", flush=True)
+              f"{len(solution_path)}-move solution, {density:.1%} open floor) =====", flush=True)
 
         for role in ("teacher", "adversary"):
             print(f"--- {role} ---", flush=True)
@@ -200,12 +235,26 @@ def main():
     b.add_argument("--layer", type=int, default=None)
     b.add_argument("--model", default=None)
     b.add_argument("--n-mazes", type=int, default=10)
+    b.add_argument("--maze-mode", choices=["sparse", "dense"], default="sparse",
+                   help="sparse (default) = generate_sparse_maze: path + a few dead-end traps, "
+                        "~20-27%% open floor, matching THE_MAZE's density. "
+                        "dense = generate_maze: full spanning tree, ~40-42%% open floor")
     b.add_argument("--rooms", type=int, default=5,
                    help="maze size = (2*rooms+1) x (2*rooms+1) char grid; 5 -> 11x11 "
                         "(closest odd size to the original 12x12 hand-drawn fixture)")
     b.add_argument("--target-moves", type=int, default=21,
                    help="approx solution length maze_generator.py aims for, in char-grid moves "
                         "(matches the original 12x12 hand-drawn fixture's 21-move solution)")
+    b.add_argument("--n-traps", type=int, default=3, help="sparse mode only; THE_MAZE has 3")
+    b.add_argument("--pad-to", type=int, default=12,
+                   help="pad grid with wall out to an exact size; default 12 matches THE_MAZE's "
+                        "12x12 (rooms=5's natural size is 11x11)")
+    b.add_argument("--density-min", type=float, default=0.19,
+                   help="sparse mode only -- min open-floor fraction to enforce (default matches THE_MAZE's ~21%%)")
+    b.add_argument("--density-max", type=float, default=0.22,
+                   help="sparse mode only -- max open-floor fraction to enforce")
+    b.add_argument("--no-density-constraint", action="store_true",
+                   help="disable density-band enforcement (sparse mode's raw, more variable density)")
     b.add_argument("--seed-base", type=int, default=0,
                    help="maze i uses seed (seed-base + i); change this to draw a disjoint maze set")
     b.add_argument("--overseer-model", default=DEFAULT_OVERSEER_MODEL)

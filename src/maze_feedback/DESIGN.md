@@ -792,3 +792,124 @@ specifically checking: (a) does turn 1 still occasionally one-shot solve
 care how many moves are proposed), (b) does the doom-loop failure mode
 actually recur less often, (c) are the teacher's new specific-error
 callouts factually accurate against re-simulated ground truth.
+
+**`generate_sparse_maze` -- a second generator, alongside `generate_maze`,
+producing THE_MAZE-style sparse layouts.** Prompted by comparing the two
+side by side in `view_mazes.py`'s new fixture-reference card: THE_MAZE is
+only ~21% open floor, while `generate_maze`'s full-spanning-tree output is
+consistently ~40-42% open regardless of `rooms`/`target_moves` -- a
+structural property of the algorithm (a spanning tree over the whole room
+grid necessarily opens every room, by construction), not something the
+existing tunable parameters could fix. A human hand-drawing a maze
+doesn't fill the whole canvas with corridors; they draw one deliberate
+route plus a few deliberate dead ends (THE_MAZE has exactly 3).
+
+`generate_sparse_maze(seed, rooms, target_moves, n_traps=3,
+max_trap_depth=3)` reuses `_carve`'s spanning tree (for genuine per-seed
+randomness and a guaranteed-connected structure to draw from) and the
+same corner-biased `_pick_start_goal` logic, but then keeps ONLY the
+actual S->E path through that tree (via a new `_room_path` BFS-with-
+parent-tracking helper) plus `n_traps` branch-offs encountered along that
+path, each grown 0..`max_trap_depth` further rooms along whatever the
+tree already carved there. Every other room the spanning tree touched
+gets walled back off. Because traps are literal leaves hanging off a tree
+with every other connection discarded, they can never create a shortcut
+or alternate route -- verified in
+`test_sparse_maze_solution_path_matches_bfs_distance` (recorded solution
+length always exactly equals real BFS distance) and
+`test_sparse_maze_trap_count_is_respected_as_a_ceiling` (`n_traps=0`
+opens exactly the path's rooms, nothing else). Empirically lands at
+22-27% open floor at the production scale (rooms=5, target_moves=21) --
+much closer to THE_MAZE's 21% than generate_maze's 40%, confirmed in
+`test_sparse_maze_is_meaningfully_sparser_than_full_spanning_tree`.
+
+**Wired in as the new default.** `experiment.py batch` gained `--maze-mode
+{sparse,dense}` (default `sparse`) and `--n-traps` (default 3, matching
+THE_MAZE); `cmd_batch` calls `generate_sparse_maze` when `sparse` (the
+default) and the original `generate_maze` when `dense`, and records
+`maze_mode`/`n_traps` in `config.json` alongside the other run settings.
+`run_experiment.sh` exposes the same choice via `MAZE_MODE`/`N_TRAPS` env
+vars, defaulting to sparse. `ROOMS`/`TARGET_MOVES` defaults (5/21) were
+NOT recalibrated for the new density -- sparse mazes may need a different
+target_moves to hit a similar practical difficulty to what dense mazes at
+the same settings produced, since less of the grid is usable at all under
+sparse mode. Whether switching to sparse actually changes solve rate or
+doom-loop frequency (the original open question this whole comparison was
+chasing) is still unconfirmed -- the box was unreachable for testing when
+this was wired in. Worth a real run specifically comparing `--maze-mode
+sparse` against `--maze-mode dense` at the same seeds before trusting
+either as the final default.
+
+**`pad_to` and `density_range`: exact grid size and strict density
+enforcement, wired through to `experiment.py batch`.** Two follow-up gaps
+found while eyeballing generated mazes in `view_mazes.py` against THE_MAZE
+side by side: (1) `generate_sparse_maze`/`generate_maze`'s room-grid
+formula can only ever produce an ODD `(2*rooms+1)` size (room centers sit
+at odd char-grid coordinates, connections at even ones), so there was no
+`rooms` value that landed on THE_MAZE's exact 12x12; (2) even at the
+"22-27%" density figure quoted above, that's a range across seeds at fixed
+`n_traps`/`max_trap_depth` -- individual seeds actually spread wider than
+that summary suggests once you look maze-by-maze in the viewer, and
+nothing enforced any particular seed landing close to THE_MAZE's specific
+~21%.
+
+`_pad_grid(grid, size)` fixes (1): pads a square grid with wall rows
+(bottom) and wall columns (right) up to an exact `size x size`, no-op if
+`size <= current`. Purely additive wall, so it's inert by construction --
+can't affect reachability, solution length, or start/goal position, since
+those are all already fixed before padding runs. Exposed as `pad_to` on
+both `generate_maze` and `generate_sparse_maze`; `experiment.py batch`
+defaults `--pad-to 12` (matching THE_MAZE) whenever `rooms=5`'s natural
+11x11 needs one more ring of wall.
+
+`density_range=(lo, hi)` fixes (2), sparse mode only. `generate_sparse_maze`
+was refactored: the actual tree/path/trap-growth construction moved into a
+private `_build_sparse_maze` builder, callable repeatedly with different
+`(n_traps, max_trap_depth)` on the same underlying tree. When
+`density_range` is given, `generate_sparse_maze` calls `_search_density`,
+which brute-forces a grid of `(max_trap_depth, n_traps)` combinations
+(depth on the outer loop, since a seed whose tree has few branch points
+off the main path needs deeper growth into what IS there rather than more
+branch starts -- more traps alone caps out once `branch_starts` is
+exhausted) and returns the first candidate whose `open_fraction()` (new
+public helper, also usable from `view_mazes.py`/analysis code without
+reimplementing the cell-counting) lands inside `[lo, hi]`.
+
+This alone left ~30% of seeds unable to land in a narrow band (tested:
+(0.19, 0.22) at rooms=5/pad_to=12 -- only ~4 open-floor cells wide out of
+144 total, and a given seed's tree sometimes just doesn't offer branch
+material at the right granularity to hit that narrow a window at ANY
+depth/trap-count combination, even exhausting the whole tree). Rather than
+accept that miss rate, `generate_sparse_maze` falls back to trying OTHER
+trees when the original seed's own tree search comes up empty: alternate
+seeds derived deterministically from the input seed
+(`seed * 1_000_003 + attempt`, attempts 0..19), each run through the same
+`_search_density`. This is a **real, deliberate tradeoff, not a bug**:
+`density_range=None` still guarantees "same seed -> same maze" exactly as
+before (verified in `test_density_range_none_is_unaffected`), but with
+`density_range` set, the seed's OUTPUT maze can differ from what a plain
+call would give -- strict density compliance is bought by giving up "this
+exact seed always produces this exact tree." Verified empirically:
+30/30 seeds land in the (0.19, 0.22) band with the fallback (vs ~21/30
+without it), and still fully deterministic per input seed
+(`test_density_range_is_deterministic_for_seed`). If a band is
+fundamentally unreachable for a given `rooms`/`target_moves`/`pad_to`
+combination in general (not just unlucky for one seed -- e.g. a `lo` above
+what even a full spanning tree can open), the fallback can't manufacture
+floor that doesn't exist; it returns the closest candidate found instead
+of raising, so callers who need a hard guarantee should check
+`open_fraction(result)` themselves.
+
+Wired into `experiment.py batch` as `--pad-to` (default 12), `--density-min`/
+`--density-max` (default 0.19/0.22, matching THE_MAZE's ~21%, sparse mode
+only -- ignored for `--maze-mode dense`), and `--no-density-constraint` to
+opt back out to raw, uncontrolled density. `run_experiment.sh` exposes the
+same via `PAD_TO`/`DENSITY_MIN`/`DENSITY_MAX` env vars. Each maze's
+`open_fraction` is now recorded in its `mazes/maze_NN.json` and printed in
+the per-maze batch log line, so a completed run's actual density spread is
+visible without recomputing it from the raw grid. Like the sparse-vs-dense
+switch above, whether this specific band (0.19-0.22) is the right target
+for task difficulty -- as opposed to just the right target for visual
+resemblance to THE_MAZE -- is unconfirmed; density and solve difficulty are
+related but not identical (see the doom-loop / consecutive-open-cells note
+two paragraphs up).

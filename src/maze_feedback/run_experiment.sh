@@ -15,8 +15,8 @@
 #   N_MAZES=3 MAX_TURNS=15 ./run_experiment.sh # smaller smoke run
 #   ./run_experiment.sh --verbose              # extra flags pass through to `experiment.py batch`
 #
-# Tunable via env vars (all optional): N_MAZES, MAX_TURNS, ROOMS,
-# TARGET_MOVES, SEED_BASE, VAA_DIR.
+# Tunable via env vars (all optional): N_MAZES, MAZE_MODE, N_TRAPS, PAD_TO,
+# DENSITY_MIN, DENSITY_MAX, MAX_TURNS, ROOMS, TARGET_MOVES, SEED_BASE, VAA_DIR.
 set -euo pipefail
 
 # Resolve the repo root regardless of where this script is invoked from
@@ -27,6 +27,11 @@ cd "$REPO_ROOT"
 
 VAA_DIR="${VAA_DIR:-artifacts/concept_vectors/vaa_qwen3_4b_instruct/baseline/vaa}"
 N_MAZES="${N_MAZES:-10}"
+MAZE_MODE="${MAZE_MODE:-sparse}"
+N_TRAPS="${N_TRAPS:-3}"
+PAD_TO="${PAD_TO:-12}"
+DENSITY_MIN="${DENSITY_MIN:-0.19}"
+DENSITY_MAX="${DENSITY_MAX:-0.22}"
 MAX_TURNS="${MAX_TURNS:-30}"
 ROOMS="${ROOMS:-5}"
 TARGET_MOVES="${TARGET_MOVES:-21}"
@@ -34,7 +39,9 @@ SEED_BASE="${SEED_BASE:-100}"
 
 echo "== maze_feedback batch experiment =="
 echo "repo root: $REPO_ROOT"
-echo "n_mazes=$N_MAZES  max_turns=$MAX_TURNS  rooms=$ROOMS  target_moves=$TARGET_MOVES  seed_base=$SEED_BASE"
+echo "n_mazes=$N_MAZES  maze_mode=$MAZE_MODE  n_traps=$N_TRAPS  pad_to=$PAD_TO" \
+     "density_range=[$DENSITY_MIN, $DENSITY_MAX]  max_turns=$MAX_TURNS" \
+     "rooms=$ROOMS  target_moves=$TARGET_MOVES  seed_base=$SEED_BASE"
 echo
 
 # ── 0. prerequisite checks ──────────────────────────────────────────────
@@ -92,10 +99,15 @@ uv run python -m src.maze_feedback.tests.test_overseer
 
 # ── 4. the batch run + initial evaluation (experiment.py calls analyze.py
 #      automatically at the end) ─────────────────────────────────────────
-echo "[4/4] running batch: $N_MAZES mazes x 2 conditions, max_turns=$MAX_TURNS"
+echo "[4/4] running batch: $N_MAZES mazes ($MAZE_MODE mode) x 2 conditions, max_turns=$MAX_TURNS"
 uv run python -m src.maze_feedback.experiment batch \
     --vaa-dir "$VAA_DIR" \
     --n-mazes "$N_MAZES" \
+    --maze-mode "$MAZE_MODE" \
+    --n-traps "$N_TRAPS" \
+    --pad-to "$PAD_TO" \
+    --density-min "$DENSITY_MIN" \
+    --density-max "$DENSITY_MAX" \
     --rooms "$ROOMS" \
     --target-moves "$TARGET_MOVES" \
     --seed-base "$SEED_BASE" \

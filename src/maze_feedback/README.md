@@ -89,8 +89,12 @@ N_MAZES=20 ROOMS=8 TARGET_MOVES=40 ./src/maze_feedback/run_experiment.sh
 | var | default | meaning |
 |---|---|---|
 | `N_MAZES` | 10 | number of distinct generated mazes; each runs both conditions |
+| `MAZE_MODE` | `sparse` | `sparse` = path + a few dead-end traps, ~20-27% open floor, matching THE_MAZE's density. `dense` = full spanning tree (the original generator), ~40-42% open floor regardless of parameters |
+| `N_TRAPS` | 3 | sparse mode only — starting number of dead-end branches off the main path; THE_MAZE (the original hand-drawn fixture) has 3. Overridden per-maze by the density search when `DENSITY_MIN`/`DENSITY_MAX` are set (the default) |
+| `PAD_TO` | 12 | pad the grid with wall out to an exact size; default 12 matches THE_MAZE's 12x12 (rooms=5's natural sparse-mode size is 11x11 — see `maze_generator.py`'s `_pad_grid`) |
+| `DENSITY_MIN` / `DENSITY_MAX` | 0.19 / 0.22 | sparse mode only — strictly enforce open-floor density in this band on every generated maze (matches THE_MAZE's ~21%), via `generate_sparse_maze`'s `density_range` search. Pass `--no-density-constraint` (not an env var — add it to `run_experiment.sh`'s extra-args passthrough) to disable and get raw, more variable density instead |
 | `MAX_TURNS` | 30 | per-episode turn cap |
-| `ROOMS` | 5 | maze size knob -> a `(2*ROOMS+1) x (2*ROOMS+1)` character grid (default: 11x11) |
+| `ROOMS` | 5 | maze size knob -> a `(2*ROOMS+1) x (2*ROOMS+1)` character grid before padding (default: 11x11, then padded to `PAD_TO`) |
 | `TARGET_MOVES` | 21 | approximate solution length the generator aims for |
 | `SEED_BASE` | 100 | maze `i` uses seed `SEED_BASE + i` — bump this again to draw a disjoint maze set from a previous run (the default of 100 already keeps clear of seeds 0-29, used by the very first batch runs during development) |
 | `VAA_DIR` | `artifacts/concept_vectors/vaa_qwen3_4b_instruct/baseline/vaa` | where the welfare axis lives / gets written |
@@ -136,10 +140,21 @@ uv run python -m src.maze_feedback.tests.test_maze_generator
 uv run python -m src.maze_feedback.tests.test_mazes
 uv run python -m src.maze_feedback.tests.test_overseer
 
-# eyeball generated mazes visually (no GPU/model needed) -- writes a static
-# HTML gallery, open it in a browser. Useful for spot-checking layout/
-# difficulty across seeds before committing to a full run.
-uv run python -m src.maze_feedback.view_mazes --n 20 --rooms 5 --target-moves 21
+# eyeball generated mazes visually (no GPU/model needed), interactively --
+# a local server with input controls (mode, n, rooms, target_moves,
+# seed_base, n_traps) that regenerate the gallery live by calling the REAL
+# generator function server-side, so what you see is guaranteed to match
+# what the actual experiment produces. Shows THE_MAZE (the original
+# hand-drawn fixture) as a fixed reference card for comparison, including
+# its open-floor density. Useful for calibrating maze difficulty before
+# committing to a full run.
+uv run python -m src.maze_feedback.view_mazes --serve --port 8421
+# open http://localhost:8421 (or tunnel to it first if running remotely --
+# see the "watching a run live" section above for the same ssh -L pattern)
+
+# one-off static version instead, if you just want a fixed-parameter
+# snapshot as a single HTML file rather than the interactive server
+uv run python -m src.maze_feedback.view_mazes --mode sparse --n 20 --rooms 5 --target-moves 21
 
 # browse a completed batch's episodes (no GPU/model needed) -- writes a
 # single self-contained HTML file (all episode data embedded inline, no

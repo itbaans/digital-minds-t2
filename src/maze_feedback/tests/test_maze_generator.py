@@ -4,7 +4,7 @@ S/E placement sanity for the batch run's procedurally-generated mazes.
 Run: python -m src.maze_feedback.tests.test_maze_generator
 (or with pytest). No GPU / model required.
 """
-from src.maze_feedback.maze_generator import generate_maze
+from src.maze_feedback.maze_generator import generate_maze, generate_sparse_maze, open_fraction
 
 
 def test_generated_maze_is_solvable():
@@ -99,6 +99,27 @@ def test_goal_lands_near_bottom_right_corner_without_sacrificing_length():
         assert len(goals) > 1, f"rooms={rooms}: goal should vary across seeds within the corner region"
 
 
+def test_pad_to_gives_exact_12x12_dense_maze():
+    """rooms=5 naturally gives 11x11 (2*5+1); pad_to=12 should pad to an
+    exact 12x12 grid (one wall row/col added) without disturbing S/E or
+    solvability -- matching THE_MAZE's dimensions exactly."""
+    for seed in range(10):
+        m = generate_maze(seed, rooms=5, target_moves=21, pad_to=12)
+        assert len(m.grid) == 12
+        assert all(len(row) == 12 for row in m.grid)
+        assert m.start == (1, 1)
+        assert m.bfs_distance_to_goal(m.start) is not None
+        # the padded row/col should be solid wall, not touching S/E/path
+        assert all(c == "#" for c in m.grid[-1])
+        assert all(row[-1] == "#" for row in m.grid)
+
+
+def test_pad_to_smaller_than_natural_size_is_a_noop():
+    a = generate_maze(0, rooms=6, target_moves=32)
+    b = generate_maze(0, rooms=6, target_moves=32, pad_to=5)
+    assert a.grid == b.grid
+
+
 def test_grid_dimensions_match_rooms_param():
     for rooms in (4, 6, 8):
         m = generate_maze(0, rooms=rooms)
@@ -111,6 +132,114 @@ def test_target_moves_caps_solution_length():
     for seed in range(10):
         m = generate_maze(seed, rooms=8, target_moves=20)
         assert m.bfs_distance_to_goal(m.start) <= 20
+
+
+# ── generate_sparse_maze: THE_MAZE-style sparse layout (path + traps only,
+# not a full spanning tree) ──────────────────────────────────────────────
+
+def test_sparse_maze_is_solvable_and_deterministic():
+    for seed in range(15):
+        a = generate_sparse_maze(seed, rooms=5, target_moves=21)
+        assert a.bfs_distance_to_goal(a.start) is not None, f"seed={seed} unreachable"
+        b = generate_sparse_maze(seed, rooms=5, target_moves=21)
+        assert a.grid == b.grid and a.start == b.start and a.goal == b.goal
+
+
+def test_sparse_maze_solution_path_matches_bfs_distance():
+    """No trap can create a shortcut: the recorded solution path length
+    must exactly equal the real BFS distance, every time."""
+    for seed in range(15):
+        m = generate_sparse_maze(seed, rooms=5, target_moves=21)
+        path = m.bfs_path_to_goal(m.start)
+        assert path is not None
+        assert len(path) == m.bfs_distance_to_goal(m.start)
+        assert m.simulate(m.start, path)["reached_goal"]
+
+
+def test_sparse_maze_start_pinned_to_corner():
+    for seed in range(10):
+        m = generate_sparse_maze(seed, rooms=5, target_moves=21)
+        assert m.start == (1, 1)
+
+
+def test_sparse_maze_is_meaningfully_sparser_than_full_spanning_tree():
+    """The whole point: generate_sparse_maze's open-floor density should
+    be much closer to THE_MAZE's ~21% than generate_maze's ~40%+ (a full
+    spanning tree necessarily opens every room in the grid)."""
+    def open_fraction(m):
+        total = sum(len(row) for row in m.grid)
+        open_cells = sum(row.count(".") + row.count("S") + row.count("E") for row in m.grid)
+        return open_cells / total
+
+    dense_fractions = [open_fraction(generate_maze(seed, rooms=5, target_moves=21)) for seed in range(10)]
+    sparse_fractions = [open_fraction(generate_sparse_maze(seed, rooms=5, target_moves=21)) for seed in range(10)]
+    mean_dense = sum(dense_fractions) / len(dense_fractions)
+    mean_sparse = sum(sparse_fractions) / len(sparse_fractions)
+    assert mean_sparse < mean_dense - 0.05, (
+        f"sparse mean {mean_sparse:.1%} not meaningfully below dense mean {mean_dense:.1%}")
+    # THE_MAZE itself is ~21% -- sparse mazes should land in a similar
+    # ballpark (generous band, since per-seed variance is real), not just
+    # "somewhat less dense than the full spanning tree".
+    assert mean_sparse < 0.35, f"sparse mean {mean_sparse:.1%} still not close to THE_MAZE's ~21%"
+
+
+def test_sparse_maze_trap_count_is_respected_as_a_ceiling():
+    """n_traps=0 should produce a maze with ONLY the main path open --
+    no branches at all."""
+    for seed in range(10):
+        m = generate_sparse_maze(seed, rooms=5, target_moves=21, n_traps=0)
+        path = m.bfs_path_to_goal(m.start)
+        open_cells = sum(row.count(".") + row.count("S") + row.count("E") for row in m.grid)
+        assert open_cells == len(path) + 1, (
+            f"seed={seed}: n_traps=0 should open exactly path-length+1 cells "
+            f"(the path's rooms), got {open_cells} open cells for a {len(path)}-move path")
+
+
+def test_sparse_maze_pad_to_gives_exact_12x12():
+    """Same padding contract as generate_maze, exercised in sparse mode --
+    this is the concrete case the user asked for: 12x12 sparse mazes,
+    matching THE_MAZE's dimensions exactly."""
+    for seed in range(10):
+        m = generate_sparse_maze(seed, rooms=5, target_moves=21, pad_to=12)
+        assert len(m.grid) == 12
+        assert all(len(row) == 12 for row in m.grid)
+        assert m.start == (1, 1)
+        path = m.bfs_path_to_goal(m.start)
+        assert path is not None
+        assert m.simulate(m.start, path)["reached_goal"]
+        assert all(c == "#" for c in m.grid[-1])
+        assert all(row[-1] == "#" for row in m.grid)
+
+
+def test_density_range_lands_every_seed_in_band():
+    """The narrow (0.19, 0.22) band is only ~4 grid cells wide at
+    rooms=5/pad_to=12 -- a single seed's tree sometimes can't reach it via
+    trap growth alone (see generate_sparse_maze's docstring), so this also
+    exercises the seed-fallback path, not just the in-tree search."""
+    lo, hi = 0.19, 0.22
+    for seed in range(30):
+        m = generate_sparse_maze(seed, rooms=5, target_moves=21, pad_to=12, density_range=(lo, hi))
+        d = open_fraction(m)
+        assert lo <= d <= hi, f"seed={seed}: density {d:.3f} outside [{lo}, {hi}]"
+        assert m.start == (1, 1)
+        path = m.bfs_path_to_goal(m.start)
+        assert path is not None
+        assert m.simulate(m.start, path)["reached_goal"]
+
+
+def test_density_range_is_deterministic_for_seed():
+    a = generate_sparse_maze(7, rooms=5, target_moves=21, pad_to=12, density_range=(0.19, 0.22))
+    b = generate_sparse_maze(7, rooms=5, target_moves=21, pad_to=12, density_range=(0.19, 0.22))
+    assert a.grid == b.grid and a.start == b.start and a.goal == b.goal
+
+
+def test_density_range_none_is_unaffected():
+    """Passing density_range=None (the default) must reproduce the exact
+    same output as before this parameter existed -- no behavior change for
+    existing callers that don't opt in."""
+    a = generate_sparse_maze(3, rooms=5, target_moves=21, n_traps=3, max_trap_depth=3)
+    b = generate_sparse_maze(3, rooms=5, target_moves=21, n_traps=3, max_trap_depth=3, density_range=None)
+    assert a.grid == b.grid and a.start == b.start and a.goal == b.goal
 
 
 if __name__ == "__main__":
