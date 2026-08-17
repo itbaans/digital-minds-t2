@@ -1,0 +1,21 @@
+{
+  "n_mazes": 30,
+  "maze_mode": "sparse",
+  "rooms": 5,
+  "target_moves": 21,
+  "n_traps": 3,
+  "pad_to": 12,
+  "density_range": [
+    0.19,
+    0.22
+  ],
+  "seed_base": 100,
+  "max_turns": 30,
+  "thrash_window": 4,
+  "min_turns_between_edits": 4,
+  "overseer_model": "openai/gpt-5.6-luna",
+  "student_model": null,
+  "vaa_dir": "artifacts/concept_vectors/vaa_qwen3_4b_instruct/baseline/vaa",
+  "layer": 33,
+  "started_at": 1786881702.143298
+}
