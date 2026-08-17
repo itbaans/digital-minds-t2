@@ -54,3 +54,14 @@ emotions/artifacts/
 
 # Claude Code
 .claude/
+CLAUDE.md
+
+# Internal design/dev-notes docs -- keep locally, not part of the public repo
+DESIGN.md
+
+# Locally-generated viewer artifacts (regenerate with view_mazes.py / view_episodes.py)
+/episode_viewer.html
+/maze_gallery.html
+
+# uv lockfile -- not tracked, regenerate locally with `uv lock` / `uv sync`
+uv.lock

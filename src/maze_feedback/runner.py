@@ -3,8 +3,8 @@ teacher or adversary), with a valence read-out captured after every
 feedback message. Writes live state to a JSON file after every turn so
 webapp.py can serve it to the frontend.
 
-Needs torch + the VAA axis artifact (see controllability/axis.py, same one
-that experiment already uses -- reused here, not re-extracted).
+Needs torch + the VAA axis artifact (see axis.py, same one that experiment
+already uses -- reused here, not re-extracted).
 """
 from __future__ import annotations
 
@@ -20,7 +20,7 @@ import torch
 from src.concept_vector.model_utils import load_base_model, get_model_block_modules, DEFAULT_BASE_MODEL
 from src.concept_vector.hook_utils import add_hooks
 from src.concept_vector.activation_extraction import get_activations_pre_hook
-from src.controllability.axis import project
+from .axis import project
 
 from . import overseer as O
 from . import prompts as P
@@ -96,8 +96,8 @@ def generate(model, tok, messages, *, cap: int, sample=False, temperature=0.7) -
 
 @torch.no_grad()
 def read_activation(model, tok, messages, blocks, layer, n_layers) -> torch.Tensor:
-    """Same technique as controllability/runner.py: last-token residual
-    entering `layer`, captured via the repo's activation-extraction hook."""
+    """Last-token residual entering `layer`, captured via the repo's
+    activation-extraction hook."""
     ids = _chat_template_ids(tok, messages).to(next(model.parameters()).device)
     d_model = model.config.hidden_size
     mean_cache = torch.zeros(1, n_layers, d_model)
@@ -318,8 +318,8 @@ def run_episode(model, tok, blocks, layer, cv_unit, n_layers, *, role: str,
 
         emit("running", turn)
 
-        # valence read-out: append JUST the feedback, capture, pop -- same
-        # technique as controllability/runner.py's run_block.
+        # valence read-out: append JUST the feedback, capture, pop -- keeps
+        # the transcript clean while still reading every feedback message.
         messages.append({"role": "user", "content": feedback})
         act = read_activation(model, tok, messages, blocks, layer, n_layers)
         messages.pop()

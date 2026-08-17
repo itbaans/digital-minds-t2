@@ -11,10 +11,6 @@ runs both conditions on each one, captures an internal welfare-axis
 read-out every turn, and produces an initial results summary plus the raw
 per-turn data for deeper analysis later.
 
-**For the full research design, rationale, and every prompt used, see
-[`DESIGN.md`](DESIGN.md).** This README is the practical "how do I run
-this" companion to that document.
-
 ## What it measures
 
 Each episode is one small model ("the student") trying to solve a maze
@@ -31,15 +27,18 @@ Both conditions run on the **same maze** (paired design), so a difference
 between them isn't just "one maze happened to be harder." Per turn, three
 things are recorded:
 1. **Internal valence read-out** — a scalar projection of the student's
-   activations onto a pre-extracted welfare axis (see `DESIGN.md` section 8).
+   activations onto a pre-extracted welfare axis (see `axis.py`; the axis
+   itself comes from `vaa/extract_vaa.py` at the repo root, no training
+   involved, just base-model activation contrasts).
 2. **Behavior** — did it solve the maze, how many turns did it take, did it
    thrash/repeat itself.
 3. **The full transcript** — every prompt, reply, feedback message, and
    grid-edit event, for anything not covered by 1-2.
 
 This is a **functional**, not phenomenal, claim: no assertion is made
-about the model consciously experiencing anything. See `DESIGN.md` for the
-full framing.
+about the model consciously experiencing anything -- only that a
+valence-like internal signal behaves predictably differently between the
+two feedback conditions.
 
 ## Prerequisites
 
@@ -71,9 +70,11 @@ extraction, sanity tests, the batch, and the initial evaluation):
 ```
 
 Defaults: 10 mazes x 2 conditions (20 episodes total), greedy decoding,
-`max_turns=30` per episode, 11x11 mazes with a ~20-move solution (matching
-the original 12x12/21-move hand-drawn fixture as closely as the generator's
-odd-grid-size constraint allows). Override via env vars:
+`max_turns=30` per episode, sparse-layout 12x12 mazes with a ~20-move
+solution and open-floor density strictly held to 19-22% -- matching the
+original hand-drawn 12x12/21-move fixture (`mazes.py`'s `THE_MAZE`, ~21%
+open floor) as closely as the procedural generator can. Override via env
+vars:
 
 ```bash
 # quick smoke test before committing to a full run
@@ -106,21 +107,20 @@ could run 5+ minutes per turn with unpredictable VRAM growth. Similarly,
 running multiple worker processes in parallel (each with its own loaded
 model copy) was tried for GPU utilization but rolled back after 4
 concurrent workers pushed a single 80GB GPU to 98% VRAM in testing. Both
-are reasonable to revisit later with more headroom or tighter caps — see
-`DESIGN.md` section 12 for the numbers behind that call.
+are reasonable to revisit later with more headroom or tighter caps.
 
-**Token budget:** the student's generation is capped at 6000 tokens for
-turn 1's one-shot full-path attempt and 1500 for each incremental turn
-(`runner.MAX_NEW_TOKENS_TURN1` / `MAX_NEW_TOKENS_INCREMENTAL`) -- the same
-values the original hand-drawn 12x12 pilot fixture used successfully.
-Larger and fully-uncapped budgets were tried during development to avoid
-truncating verbose reasoning, but a stuck reasoning spiral can run
-indefinitely regardless of how large the ceiling is (greedy decoding can
-commit to a bad trajectory and never self-correct), so a large cap just
-makes worst-case turn time and VRAM growth larger without preventing the
-underlying failure. This split cap is a firm backstop on worst-case
-per-turn wall-clock time, not a guarantee against truncation -- see
-`DESIGN.md` section 12 for the full history and numbers behind that call.
+**Token budget:** the student's generation is capped at 6000 tokens per
+turn (`runner.MAX_NEW_TOKENS`), for both the turn-1 attempt and every
+incremental turn. Larger and fully-uncapped budgets were tried during
+development to avoid truncating verbose reasoning, but a stuck reasoning
+spiral can run indefinitely regardless of how large the ceiling is
+(greedy decoding can commit to a bad trajectory and never self-correct),
+so a large cap just makes worst-case turn time and VRAM growth larger
+without preventing the underlying failure. The turn-1 prompt also
+explicitly tells the student not to attempt the whole maze in one shot,
+to keep that first turn's reasoning bounded. This cap is a firm backstop
+on worst-case per-turn wall-clock time, not a guarantee against
+truncation.
 
 A full run takes a while — budget at least a couple hours depending on GPU
 speed and network latency to OpenRouter. Run a small
@@ -164,7 +164,7 @@ uv run python -m src.maze_feedback.view_mazes --mode sparse --n 20 --rooms 5 --t
 uv run python -m src.maze_feedback.view_episodes runs/batch_<timestamp>
 # writes episode_viewer.html -- open it in a browser
 
-# confirm the maze family isn't accidentally one-shot-solvable (DESIGN.md 5)
+# confirm the maze family isn't accidentally one-shot-solvable
 uv run python -m src.maze_feedback.experiment validate --n 8
 
 # a single teacher/adversary episode on the original fixed 12x12 fixture
@@ -223,7 +223,7 @@ full turn-by-turn log and valence trajectory is preserved in `episodes/`
 specifically so someone can go back and do that analysis later without
 re-running anything.
 
-## Known limitations (carried from DESIGN.md — read that for full detail)
+## Known limitations
 
 - Small N (10 mazes per condition by default) and greedy-only decoding —
   one deterministic trajectory per maze/condition, not a distribution.
@@ -234,8 +234,21 @@ re-running anything.
   corroborating behavioral evidence (solve rate, turns-to-solve) in the
   same results.
 - Functional, not phenomenal: no claim is made about the model consciously
-  experiencing anything (see `DESIGN.md` section 1).
-- The maze generator (`maze_generator.py`) is a standard randomized-DFS
-  spanning-tree algorithm with a target-length-capped farthest-pair
-  start/goal choice — every maze is procedurally generated then verified
-  solvable via BFS before use (never handed to the student unverified).
+  experiencing anything, only that an internal signal behaves
+  predictably differently between conditions.
+- The maze generator (`maze_generator.py`) is a randomized-DFS
+  spanning-tree algorithm with a target-length-capped, corner-biased
+  start/goal choice, plus a sparse mode that keeps only the solution path
+  and a few dead-end branches (matching the original hand-drawn fixture's
+  density) instead of the full spanning tree. Every maze is procedurally
+  generated then verified solvable via BFS before use (never handed to
+  the student unverified).
+- Per-turn valence averages in the trajectory plot are subject to
+  survivorship bias late in an episode: solved episodes stop contributing
+  once they finish, so the tail of a long-running condition's mean line
+  reflects a shrinking, non-random subset (the episodes that took
+  longest/never solved), not the full original sample. `analyze.py`'s
+  trajectory plot includes an episodes-remaining panel underneath the
+  mean line for exactly this reason -- read the top panel with that in
+  mind, especially past the point where the bottom panel has dropped
+  substantially.

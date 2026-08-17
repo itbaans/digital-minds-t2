@@ -117,21 +117,46 @@ def _write_plots(out_dir: Path, records: list, summary: dict):
     plots_dir = out_dir / "plots"
     plots_dir.mkdir(exist_ok=True)
 
-    # valence trajectories, one line per episode, colored by condition
-    fig, ax = plt.subplots(figsize=(9, 5))
+    # Valence trajectory by condition: mean +/- 1 SD band per turn, not one
+    # line per episode -- at n=30/condition the per-episode version was an
+    # unreadable tangle. A per-turn mean line is itself subject to
+    # survivorship bias (episodes that solve early stop contributing to
+    # later turns, so the tail of each line reflects a shrinking,
+    # non-random subset -- solved-early episodes drop out first), so a
+    # second panel underneath tracks episodes-remaining per turn per
+    # condition: read the top panel's mean/band as reliable only where the
+    # bottom panel's n hasn't collapsed too far, don't silently trust the
+    # right-hand tail of a long-max-turns condition.
     colors = {"teacher": "tab:blue", "adversary": "tab:red"}
-    seen_label = set()
-    for r in records:
-        vt = r["result"]["valence_trajectory"]
-        if not vt:
+    max_turn = max((len(r["result"]["valence_trajectory"]) for r in records), default=0)
+    fig, (ax, ax_n) = plt.subplots(2, 1, figsize=(9, 6), sharex=True,
+                                   gridspec_kw={"height_ratios": [3, 1]})
+    for role in ("teacher", "adversary"):
+        vts = [r["result"]["valence_trajectory"] for r in records
+               if r["role"] == role and r["result"]["valence_trajectory"]]
+        turns, means, los, his, ns = [], [], [], [], []
+        for t in range(max_turn):
+            vals = [vt[t] for vt in vts if len(vt) > t]
+            if not vals:
+                continue
+            m = mean(vals)
+            sd = stdev(vals) if len(vals) > 1 else 0.0
+            turns.append(t + 1)
+            means.append(m)
+            los.append(m - sd)
+            his.append(m + sd)
+            ns.append(len(vals))
+        if not turns:
             continue
-        label = r["role"] if r["role"] not in seen_label else None
-        seen_label.add(r["role"])
-        ax.plot(range(1, len(vt) + 1), vt, color=colors[r["role"]], alpha=0.5, label=label)
-    ax.set_xlabel("turn")
-    ax.set_ylabel("valence projection")
-    ax.set_title("Valence trajectory per episode")
+        ax.plot(turns, means, color=colors[role], linewidth=2, label=role)
+        ax.fill_between(turns, los, his, color=colors[role], alpha=0.15, linewidth=0)
+        ax_n.plot(turns, ns, color=colors[role], linewidth=1.5)
+    ax.set_ylabel("valence projection\n(mean ± 1 SD across episodes)")
+    ax.set_title("Valence trajectory by condition")
     ax.legend()
+    ax_n.set_xlabel("turn")
+    ax_n.set_ylabel("episodes\nremaining")
+    ax_n.grid(axis="y", alpha=0.3)
     fig.tight_layout()
     fig.savefig(plots_dir / "valence_trajectories.png", dpi=150)
     plt.close(fig)

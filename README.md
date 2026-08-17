@@ -1,5 +1,8 @@
-# THE UPDATED CODE TO SEE AT src/controllabiltiy
-
+> **This fork adds a new experiment:** honest vs. deceptive overseer
+> feedback and its effect on task success and internal valence, built on
+> top of this repo's model/interpretability infrastructure. See
+> [`src/maze_feedback/`](src/maze_feedback/) for that work -- the README
+> below is the original repository's, unmodified.
 
 # Reinforcement learning in language models recruits a functional welfare axis (INITIAL REPO)
 

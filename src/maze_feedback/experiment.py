@@ -20,7 +20,7 @@ import time
 from pathlib import Path
 from statistics import mean
 
-from src.controllability.axis import load_axis
+from .axis import load_axis
 
 from . import analyze as A
 from . import prompts as P

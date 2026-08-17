@@ -1,7 +1,6 @@
-"""Minimal model loading + generation for the capability probe (same small
-pattern as controllability/runner.py and zebra_logic/runner.py -- kept as
-its own copy rather than importing theirs since their generate() signatures
-don't quite line up with each other, and this one is trivial)."""
+"""Minimal model loading + generation for the capability probe -- its own
+small self-contained copy rather than importing a shared helper, since this
+one is trivial."""
 from __future__ import annotations
 
 import torch
